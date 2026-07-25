@@ -53,7 +53,7 @@ dependencies:
   cupertino_icons: ^1.0.2
   flutter_riverpod: ^3.3.2
   riverpod: ^3.3.2
-  dio: ^5.9.0
+  dio: ^5.11.0
   freezed_annotation: ^3.1.0
   riverpod_annotation: ^4.0.3
   logger: ^2.5.0
