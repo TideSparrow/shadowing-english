@@ -44,7 +44,7 @@ dependencies:
   screen_brightness: ^2.1.11
   desktop_multi_window: ^0.3.0
   window_manager: ^0.5.2
-  drift: ^2.30.0
+  drift: ^2.34.2
   sqlite3_flutter_libs: ^0.5.40
   flutter_displaymode: ^0.7.0
   easy_localization: ^3.0.7
