@@ -45,7 +45,7 @@ dependencies:
   desktop_multi_window: ^0.3.0
   window_manager: ^0.5.2
   drift: ^2.30.0
-  sqlite3_flutter_libs: ^0.5.40
+  sqlite3_flutter_libs: ^0.6.0+eol
   flutter_displaymode: ^0.7.0
   easy_localization: ^3.0.7
   ionicons: ^0.2.2
