@@ -49,7 +49,7 @@ dependencies:
   flutter_displaymode: ^0.7.0
   easy_localization: ^3.0.7
   ionicons: ^0.2.2
-  lucide_flutter: ^1.23.0
+  lucide_flutter: ^1.25.0
   cupertino_icons: ^1.0.2
   flutter_riverpod: ^3.3.2
   riverpod: ^3.3.2
