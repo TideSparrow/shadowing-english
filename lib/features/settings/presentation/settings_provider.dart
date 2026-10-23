@@ -36,7 +36,7 @@ const List<String> translationProviderOptions = <String>[
   '百度翻译',
   '阿里云翻译',
 ];
-const List<String> asrProviderOptions = <String>['阿里云百炼', 'OpenAI', '腾讯云'];
+const List<String> asrProviderOptions = <String>['阿里云百炼', '腾讯云'];
 
 const String _learningSettingsStorageKey = 'learning_settings_v1';
 
@@ -98,11 +98,6 @@ const Map<String, TranslationProviderPreset> asrProviderPresets =
         baseUrl: 'https://dashscope.aliyuncs.com',
         model: 'qwen3-asr-flash-filetrans',
       ),
-      'OpenAI': TranslationProviderPreset(
-        name: 'OpenAI',
-        baseUrl: 'https://api.openai.com/v1',
-        model: 'whisper-1',
-      ),
       '腾讯云': TranslationProviderPreset(
         name: '腾讯云',
         baseUrl: 'https://asr.tencentcloudapi.com',
@@ -134,8 +129,6 @@ class LearningSettingsState {
     required this.asrApiKey,
     required this.asrBaseUrl,
     required this.asrModel,
-    required this.availableAsrModels,
-    required this.isFetchingAsrModels,
     required this.useCustomAsrEndpoint,
     required this.generateBilingualAsrSubtitles,
     required this.ttsEngine,
@@ -170,8 +163,6 @@ class LearningSettingsState {
       asrApiKey: '',
       asrBaseUrl: defaultAsrPreset.baseUrl,
       asrModel: defaultAsrPreset.model,
-      availableAsrModels: const <String>[],
-      isFetchingAsrModels: false,
       useCustomAsrEndpoint: false,
       generateBilingualAsrSubtitles: true,
       ttsEngine: '',
@@ -202,8 +193,6 @@ class LearningSettingsState {
   final String asrApiKey;
   final String asrBaseUrl;
   final String asrModel;
-  final List<String> availableAsrModels;
-  final bool isFetchingAsrModels;
   final bool useCustomAsrEndpoint;
   final bool generateBilingualAsrSubtitles;
   final String ttsEngine;
@@ -233,8 +222,6 @@ class LearningSettingsState {
     String? asrApiKey,
     String? asrBaseUrl,
     String? asrModel,
-    List<String>? availableAsrModels,
-    bool? isFetchingAsrModels,
     bool? useCustomAsrEndpoint,
     bool? generateBilingualAsrSubtitles,
     String? ttsEngine,
@@ -270,8 +257,6 @@ class LearningSettingsState {
       asrApiKey: asrApiKey ?? this.asrApiKey,
       asrBaseUrl: asrBaseUrl ?? this.asrBaseUrl,
       asrModel: asrModel ?? this.asrModel,
-      availableAsrModels: availableAsrModels ?? this.availableAsrModels,
-      isFetchingAsrModels: isFetchingAsrModels ?? this.isFetchingAsrModels,
       useCustomAsrEndpoint: useCustomAsrEndpoint ?? this.useCustomAsrEndpoint,
       generateBilingualAsrSubtitles:
           generateBilingualAsrSubtitles ?? this.generateBilingualAsrSubtitles,
@@ -557,8 +542,6 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
       asrProvider: provider,
       asrBaseUrl: preset.baseUrl,
       asrModel: preset.model,
-      availableAsrModels: const <String>[],
-      isFetchingAsrModels: false,
     );
     _persist();
   }
@@ -598,34 +581,6 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
   void setAsrModel(String value) {
     state = state.copyWith(asrModel: value.trim());
     _persist();
-  }
-
-  Future<List<String>> fetchAsrModels() async {
-    if (state.asrApiKey.isEmpty) {
-      throw StateError('missing-api-key');
-    }
-
-    state = state.copyWith(isFetchingAsrModels: true);
-    try {
-      final List<String> models = await ref
-          .read(translationModelServiceProvider)
-          .fetchModels(
-            settings: state.copyWith(
-              translationBaseUrl: state.asrBaseUrl,
-              translationApiKey: state.asrApiKey,
-            ),
-          );
-      state = state.copyWith(
-        isFetchingAsrModels: false,
-        availableAsrModels: models,
-        // /models can include chat models; fetching must not replace the
-        // configured transcription model with an unrelated first result.
-      );
-      return models;
-    } catch (_) {
-      state = state.copyWith(isFetchingAsrModels: false);
-      rethrow;
-    }
   }
 
   void setHighlightWords({required bool value}) {

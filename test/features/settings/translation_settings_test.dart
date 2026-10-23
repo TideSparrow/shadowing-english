@@ -280,6 +280,58 @@ void main() {
   });
 
   test(
+    'removing OpenAI ASR resets recognition only and preserves translation',
+    () async {
+      await Hive.box<String>('prefs').put(
+        'learning_settings_v1',
+        jsonEncode(<String, Object?>{
+          'asrProvider': 'OpenAI',
+          'asrApiKey': 'old-asr-key',
+          'asrBaseUrl': 'https://relay.example/v1',
+          'asrModel': 'whisper-1',
+          'useCustomAsrEndpoint': true,
+          'translationProvider': 'OpenAI',
+          'translationApiKey': 'translation-key',
+          'translationBaseUrl': 'https://translation.example/v1',
+          'translationModel': 'gpt-4o-mini',
+          'useCustomTranslationEndpoint': true,
+          'subtitleMode': '双语',
+        }),
+      );
+      final ProviderContainer container = ProviderContainer();
+      addTearDown(container.dispose);
+      final LearningSettingsState state = container.read(
+        learningSettingsProvider,
+      );
+      expect(asrProviderOptions, <String>['阿里云百炼', '腾讯云']);
+      expect(asrProviderPresets.containsKey('OpenAI'), isFalse);
+      expect(state.asrProvider, '阿里云百炼');
+      expect(state.asrApiKey, isEmpty);
+      expect(state.asrBaseUrl, 'https://dashscope.aliyuncs.com');
+      expect(state.asrModel, 'qwen3-asr-flash-filetrans');
+      expect(state.useCustomAsrEndpoint, isFalse);
+      expect(state.subtitleMode, '双语');
+      expect(state.translationProvider, 'OpenAI');
+      expect(state.translationApiKey, 'translation-key');
+      expect(state.translationBaseUrl, 'https://translation.example/v1');
+      expect(state.translationModel, 'gpt-4o-mini');
+      expect(state.useCustomTranslationEndpoint, isTrue);
+      container.read(learningSettingsProvider.notifier)
+        ..setAsrProvider('OpenAI')
+        ..setGenerateBilingualAsrSubtitles(value: false);
+      await Hive.box<String>('prefs').flush();
+      final ProviderContainer restored = ProviderContainer();
+      addTearDown(restored.dispose);
+      expect(restored.read(learningSettingsProvider).asrProvider, '阿里云百炼');
+      expect(restored.read(learningSettingsProvider).asrApiKey, isEmpty);
+      expect(
+        restored.read(learningSettingsProvider).translationApiKey,
+        'translation-key',
+      );
+    },
+  );
+
+  test(
     'unsupported ASR providers are no longer selectable or restored',
     () async {
       final ProviderContainer container = ProviderContainer();
@@ -307,55 +359,6 @@ void main() {
       expect(state.asrProvider, '阿里云百炼');
       expect(state.asrBaseUrl, 'https://dashscope.aliyuncs.com');
       expect(state.asrModel, 'qwen3-asr-flash-filetrans');
-    },
-  );
-
-  test(
-    'fetching ASR models preserves the configured model and persists it',
-    () async {
-      final ProviderContainer container = ProviderContainer(
-        overrides: <Override>[
-          translationModelServiceProvider.overrideWith(
-            (Ref ref) => TranslationModelService(
-              httpRequestOverride:
-                  ({required BaseOptions options, required String path}) async {
-                    expect(options.baseUrl, 'https://relay.example/v1');
-                    expect(options.headers['Authorization'], 'Bearer asr-key');
-                    return Response<dynamic>(
-                      requestOptions: RequestOptions(path: path),
-                      data: <String, dynamic>{
-                        'data': <Map<String, String>>[
-                          <String, String>{'id': 'openai/gpt-5.6-terra'},
-                          <String, String>{'id': 'gpt-4o-mini'},
-                        ],
-                      },
-                    );
-                  },
-            ),
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
-      final LearningSettingsNotifier notifier =
-          container.read(learningSettingsProvider.notifier)
-            ..setAsrProvider('OpenAI')
-            ..setAsrApiKey('asr-key')
-            ..setUseCustomAsrEndpoint(value: true)
-            ..setAsrBaseUrl('https://relay.example/v1');
-      for (final String model in <String>['whisper-1', 'custom-transcriber']) {
-        notifier.setAsrModel(model);
-        final List<String> models = await notifier.fetchAsrModels();
-        expect(models, contains('openai/gpt-5.6-terra'));
-        expect(container.read(learningSettingsProvider).asrModel, model);
-        expect(
-          container.read(learningSettingsProvider).isFetchingAsrModels,
-          isFalse,
-        );
-        await Hive.box<String>('prefs').flush();
-        final ProviderContainer restored = ProviderContainer();
-        expect(restored.read(learningSettingsProvider).asrModel, model);
-        restored.dispose();
-      }
     },
   );
 

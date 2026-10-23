@@ -484,10 +484,8 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                       ] else
                         _InputRow(
-                          title: isAlibabaAsr ? '百炼 API Key' : 'ASR API Key',
-                          description: isAlibabaAsr
-                              ? '在阿里云百炼创建 API Key；音频仅临时上传用于转写。'
-                              : '用于调用当前 ASR 接口。',
+                          title: '百炼 API Key',
+                          description: '在阿里云百炼创建 API Key；音频仅临时上传用于转写。',
                           value: settings.asrApiKey,
                           hintText: 'YOUR_ASR_API_KEY_HERE',
                           obscureText: true,
@@ -533,70 +531,15 @@ class SettingsScreen extends ConsumerWidget {
                               .setAsrBaseUrl(value);
                         },
                       ),
-                      if (!isTencentAsr && !isAlibabaAsr)
-                        _ModelFetchRow(
-                          title: '获取 ASR 模型',
-                          emptyDescription: '获取接口的模型列表，当前模型不会自动更改。',
-                          loadedDescription: '列表可能包含聊天模型，请选择支持词级时间戳的语音识别模型。',
-                          isLoading: settings.isFetchingAsrModels,
-                          hasModels: settings.availableAsrModels.isNotEmpty,
-                          onTap: () async {
-                            if (settings.asrApiKey.trim().isEmpty) {
-                              _showMessage(context, '请先填写 ASR API Key。');
-                              return;
-                            }
-                            try {
-                              final List<String> models = await ref
-                                  .read(learningSettingsProvider.notifier)
-                                  .fetchAsrModels();
-                              if (!context.mounted) {
-                                return;
-                              }
-                              _showMessage(
-                                context,
-                                models.isEmpty
-                                    ? '未获取到可用 ASR 模型。'
-                                    : '已获取 ${models.length} 个模型，请选择语音识别模型。',
-                              );
-                            } catch (_) {
-                              if (!context.mounted) {
-                                return;
-                              }
-                              _showMessage(context, '获取 ASR 模型失败，请检查当前配置。');
-                            }
-                          },
-                        ),
-                      if (settings.availableAsrModels.isNotEmpty)
-                        _SelectRow(
-                          title: 'ASR 模型选择',
-                          description: '请选择支持词级时间戳的语音识别模型，不能使用聊天模型。',
-                          value: settings.asrModel,
-                          options: <String>{
-                            settings.asrModel,
-                            ...settings.availableAsrModels,
-                          }.toList(growable: false),
-                          onChanged: (String? value) {
-                            if (value == null) {
-                              return;
-                            }
-                            ref
-                                .read(learningSettingsProvider.notifier)
-                                .setAsrModel(value);
-                          },
-                        ),
                       _InputRow(
                         title: 'ASR Model',
                         description: isTencentAsr
                             ? '腾讯英文识别使用 16k_en。'
-                            : isAlibabaAsr
-                            ? '默认使用 qwen3-asr-flash-filetrans，提供词级时间戳。'
-                            : '默认 whisper-1；中转需支持语音转写和词级时间戳。',
+                            : '默认使用 qwen3-asr-flash-filetrans，提供词级时间戳。',
                         value: settings.asrModel,
                         hintText: isTencentAsr
                             ? '16k_en'
-                            : isAlibabaAsr
-                            ? 'qwen3-asr-flash-filetrans'
-                            : 'whisper-1',
+                            : 'qwen3-asr-flash-filetrans',
                         onChanged: (String value) {
                           ref
                               .read(learningSettingsProvider.notifier)
