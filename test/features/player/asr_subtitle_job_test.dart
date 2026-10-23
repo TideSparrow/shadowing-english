@@ -269,6 +269,7 @@ void main() {
       final File video = File('${root.path}/lesson.mp4')
         ..writeAsStringSync('v');
       final File chunk = File('${root.path}/chunk.m4a')..writeAsStringSync('a');
+      final List<AsrSubtitleProgress> progress = <AsrSubtitleProgress>[];
       final AsrSubtitleJobRunner runner = AsrSubtitleJobRunner(
         supportDirectory: () async => root,
         cache: AsrSubtitleCache(appSupportDirectory: () async => root),
@@ -286,7 +287,11 @@ void main() {
             ({
               required String sentence,
               required LearningSettingsState settings,
-            }) async => '你好。',
+            }) async {
+              expect(progress.last.phase, AsrSubtitlePhase.translating);
+              expect(progress.last.label, '正在翻译中文字幕 0/1 句');
+              return '你好。';
+            },
       );
 
       final String raw = await runner.run(
@@ -295,9 +300,22 @@ void main() {
         settings: LearningSettingsState.defaults().copyWith(
           generateBilingualAsrSubtitles: true,
         ),
+        onProgress: progress.add,
       );
 
       expect(parseSubtitleLines(raw).single.chinese, '你好。');
+      expect(
+        progress
+            .where(
+              (AsrSubtitleProgress value) =>
+                  value.phase == AsrSubtitlePhase.translating,
+            )
+            .map((AsrSubtitleProgress value) => value.completedTranslations),
+        <int>[0, 1],
+      );
+      expect(progress[progress.length - 2].phase, AsrSubtitlePhase.finalizing);
+      expect(progress.last.phase, AsrSubtitlePhase.completed);
+      expect(progress.last.value, 1);
     },
   );
 
@@ -349,6 +367,7 @@ void main() {
     final File chunk = File('${root.path}/chunk.m4a')
       ..writeAsStringSync('audio');
     final Map<String, int> calls = <String, int>{};
+    final List<AsrSubtitleProgress> resumedProgress = <AsrSubtitleProgress>[];
     final AsrSubtitleJobRunner runner = AsrSubtitleJobRunner(
       supportDirectory: () async => root,
       cache: AsrSubtitleCache(appSupportDirectory: () async => root),
@@ -392,6 +411,7 @@ void main() {
       episodeId: 'episode-1',
       videoPath: video.path,
       settings: settings,
+      onProgress: resumedProgress.add,
     );
 
     expect(calls['first line'], 1);
@@ -401,6 +421,15 @@ void main() {
       <String>['翻译：first line', '翻译：second line'],
     );
     expect(subtitleGenerationWarning(raw), isNull);
+    expect(
+      resumedProgress
+          .where(
+            (AsrSubtitleProgress value) =>
+                value.phase == AsrSubtitlePhase.translating,
+          )
+          .map((AsrSubtitleProgress value) => value.completedTranslations),
+      <int>[0, 1, 2],
+    );
   });
 
   test('resume skips completed chunk files', () async {
@@ -1295,9 +1324,14 @@ void main() {
       onProgress: progress.add,
     );
 
-    expect(progress.last.label, '已识别到 1:31 / 2:00');
-    expect(progress.last.value, closeTo(91000 / 120000, 0.001));
-    expect(progress.last.previewText, 'chunk');
+    final AsrSubtitleProgress recognized = progress.lastWhere(
+      (AsrSubtitleProgress value) =>
+          value.phase == AsrSubtitlePhase.recognizing,
+    );
+    expect(recognized.label, '已识别到 1:31 / 2:00');
+    expect(recognized.value, closeTo(91000 / 120000, 0.001));
+    expect(recognized.previewText, 'chunk');
+    expect(progress.last.label, '字幕生成完成');
   });
 
   test(

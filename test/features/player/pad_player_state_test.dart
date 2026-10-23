@@ -734,6 +734,31 @@ void main() {
     expect(find.text('正在生成词级同步字幕 1/2'), findsOneWidget);
     expect(find.text('Recognized preview.'), findsOneWidget);
 
+    progress.value = const AsrSubtitleProgress(
+      completedChunks: 2,
+      totalChunks: 2,
+      phase: AsrSubtitlePhase.translating,
+      completedTranslations: 1,
+      totalTranslations: 3,
+    );
+    await tester.pump();
+    expect(find.text('正在翻译中文字幕 1/3 句'), findsOneWidget);
+    expect(find.text('正在生成词级同步字幕 1/2'), findsNothing);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+          .value,
+      closeTo(1 / 3, 0.001),
+    );
+
+    progress.value = const AsrSubtitleProgress(
+      completedChunks: 2,
+      totalChunks: 2,
+      phase: AsrSubtitlePhase.finalizing,
+    );
+    await tester.pump();
+    expect(find.text('正在校验并保存字幕...'), findsOneWidget);
+
     await tester.tapAt(const Offset(4, 4));
     await tester.pump();
     expect(find.text('正在生成 AI 词级字幕'), findsOneWidget);

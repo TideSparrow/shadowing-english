@@ -1517,10 +1517,18 @@ class _ControlDock extends StatelessWidget {
                       alpha: 0.15,
                     ),
                   ),
-                  child: Slider(
-                    key: const ValueKey<String>('player-seek-slider'),
-                    value: videoProgress.clamp(0.0, 1.0),
-                    onChanged: onSeek,
+                  // Keep the Slider's OverlayPortal in the same semantics
+                  // subtree during route and subtitle transitions. Flutter
+                  // 3.44 can otherwise send an orphan node to the native AX
+                  // bridge and crash on macOS (flutter/flutter#190357).
+                  child: Overlay.wrap(
+                    alwaysSizeToContent: true,
+                    clipBehavior: Clip.none,
+                    child: Slider(
+                      key: const ValueKey<String>('player-seek-slider'),
+                      value: videoProgress.clamp(0.0, 1.0),
+                      onChanged: onSeek,
+                    ),
                   ),
                 ),
               ),

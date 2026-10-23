@@ -65,6 +65,66 @@ void main() {
     },
   );
 
+  test('transcription errors expose the server rejection reason', () async {
+    final File audio = File(
+      '${Directory.systemTemp.createTempSync('asr-transcription-error-test-').path}/lesson.m4a',
+    )..writeAsStringSync('audio');
+    addTearDown(() => audio.parent.deleteSync(recursive: true));
+
+    final AsrSubtitleService service = AsrSubtitleService(
+      postTranscriptionOverride:
+          ({required BaseOptions options, required FormData data}) async {
+            final RequestOptions request = RequestOptions(
+              path: '/audio/transcriptions',
+            );
+            throw DioException(
+              requestOptions: request,
+              type: DioExceptionType.badResponse,
+              response: Response<dynamic>(
+                requestOptions: request,
+                statusCode: 400,
+                data: <String, Object?>{
+                  'error': <String, Object?>{
+                    'message': 'This model does not support verbose_json.',
+                    'code': 'unsupported_value',
+                  },
+                },
+              ),
+            );
+          },
+    );
+
+    await expectLater(
+      service.generateCloudChunk(
+        chunk: AsrAudioChunk(file: audio, offsetMs: 0),
+        settings: LearningSettingsState.defaults().copyWith(
+          asrProvider: 'OpenAI',
+          asrApiKey: 'demo-key',
+          asrBaseUrl: 'https://api.example.com/v1',
+          asrModel: 'example-model',
+        ),
+      ),
+      throwsA(
+        isA<StateError>()
+            .having(
+              (StateError error) => error.message,
+              'status',
+              contains('HTTP 400'),
+            )
+            .having(
+              (StateError error) => error.message,
+              'server reason',
+              contains('This model does not support verbose_json.'),
+            )
+            .having(
+              (StateError error) => error.message,
+              'Dio boilerplate',
+              isNot(contains('RequestOptions.validateStatus')),
+            ),
+      ),
+    );
+  });
+
   test('MiMo token plan uses chat completions audio input', () async {
     final File video = File(
       '${Directory.systemTemp.createTempSync('mimo-asr-service-test-').path}/lesson.mp4',

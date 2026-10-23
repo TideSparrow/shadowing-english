@@ -535,6 +535,26 @@ class AsrSubtitleJobRunner {
         settings: settings,
         jobDir: jobDir,
         cancellationToken: cancellationToken,
+        onProgress: (int completed, int total, String? previewText) {
+          onProgress?.call(
+            AsrSubtitleProgress(
+              completedChunks: chunks.length,
+              totalChunks: chunks.length,
+              phase: AsrSubtitlePhase.translating,
+              completedTranslations: completed,
+              totalTranslations: total,
+              previewText: previewText ?? '英文识别已完成，正在逐句补齐中文。',
+            ),
+          );
+        },
+      );
+      onProgress?.call(
+        AsrSubtitleProgress(
+          completedChunks: chunks.length,
+          totalChunks: chunks.length,
+          phase: AsrSubtitlePhase.finalizing,
+          previewText: '正在整理时间轴并保存结果。',
+        ),
       );
       completedRaw = _repairFinalWordTimelines(translatedRaw, report: report);
     } catch (error) {
@@ -592,6 +612,13 @@ class AsrSubtitleJobRunner {
       error: '',
     );
     await report.write(jobDir, 'PASS');
+    onProgress?.call(
+      AsrSubtitleProgress(
+        completedChunks: chunks.length,
+        totalChunks: chunks.length,
+        phase: AsrSubtitlePhase.completed,
+      ),
+    );
     return completedRaw;
   }
 
@@ -643,6 +670,7 @@ class AsrSubtitleJobRunner {
     required LearningSettingsState settings,
     required Directory jobDir,
     AsrSubtitleCancellationToken? cancellationToken,
+    void Function(int completed, int total, String? previewText)? onProgress,
   }) async {
     if (!settings.generateBilingualAsrSubtitles) {
       return raw;
@@ -671,6 +699,20 @@ class AsrSubtitleJobRunner {
       checkpoint,
       signature,
     );
+    final List<Map<String, dynamic>> englishLines = lines
+        .whereType<Map<String, dynamic>>()
+        .where(
+          (Map<String, dynamic> line) =>
+              (line['english'] as String? ?? '').trim().isNotEmpty,
+        )
+        .toList(growable: false);
+    int completed = englishLines
+        .where(
+          (Map<String, dynamic> line) =>
+              (line['chinese'] as String? ?? '').trim().isNotEmpty,
+        )
+        .length;
+    onProgress?.call(completed, englishLines.length, null);
     for (final dynamic line in lines) {
       if (line is! Map<String, dynamic>) {
         continue;
@@ -720,6 +762,8 @@ class AsrSubtitleJobRunner {
         });
       }
       cancellationToken?.throwIfCancelled();
+      completed += 1;
+      onProgress?.call(completed, englishLines.length, english);
     }
     return const JsonEncoder.withIndent('  ').convert(decoded);
   }

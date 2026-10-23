@@ -52,6 +52,8 @@ class AsrAudioChunk {
   final int offsetMs;
 }
 
+enum AsrSubtitlePhase { recognizing, translating, finalizing, completed }
+
 class AsrSubtitleProgress {
   const AsrSubtitleProgress({
     required this.completedChunks,
@@ -59,6 +61,9 @@ class AsrSubtitleProgress {
     this.currentMs,
     this.totalMs,
     this.previewText,
+    this.phase = AsrSubtitlePhase.recognizing,
+    this.completedTranslations = 0,
+    this.totalTranslations = 0,
   });
 
   final int completedChunks;
@@ -66,8 +71,20 @@ class AsrSubtitleProgress {
   final int? currentMs;
   final int? totalMs;
   final String? previewText;
+  final AsrSubtitlePhase phase;
+  final int completedTranslations;
+  final int totalTranslations;
 
   double get value {
+    if (phase == AsrSubtitlePhase.translating) {
+      return totalTranslations == 0
+          ? 0
+          : (completedTranslations / totalTranslations).clamp(0.0, 1.0);
+    }
+    if (phase == AsrSubtitlePhase.finalizing ||
+        phase == AsrSubtitlePhase.completed) {
+      return 1;
+    }
     final int? current = currentMs;
     final int? total = totalMs;
     if (current != null && total != null && total > 0) {
@@ -77,6 +94,16 @@ class AsrSubtitleProgress {
   }
 
   String get label {
+    switch (phase) {
+      case AsrSubtitlePhase.translating:
+        return '正在翻译中文字幕 $completedTranslations/$totalTranslations 句';
+      case AsrSubtitlePhase.finalizing:
+        return '正在校验并保存字幕...';
+      case AsrSubtitlePhase.completed:
+        return '字幕生成完成';
+      case AsrSubtitlePhase.recognizing:
+        break;
+    }
     final int? current = currentMs;
     final int? total = totalMs;
     if (current != null && total != null && total > 0) {
@@ -242,12 +269,18 @@ class AsrSubtitleService {
       'timestamp_granularities[]': 'word',
     });
 
-    final Response<dynamic> response = postTranscriptionOverride != null
-        ? await postTranscriptionOverride!(options: options, data: data)
-        : await Dio(options).post<dynamic>('/audio/transcriptions', data: data);
+    try {
+      final Response<dynamic> response = postTranscriptionOverride != null
+          ? await postTranscriptionOverride!(options: options, data: data)
+          : await Dio(
+              options,
+            ).post<dynamic>('/audio/transcriptions', data: data);
 
-    final Object? normalized = _normalizeResponse(response.data);
-    return _offsetNormalized(normalized, offsetMs);
+      final Object? normalized = _normalizeResponse(response.data);
+      return _offsetNormalized(normalized, offsetMs);
+    } on DioException catch (error) {
+      throw StateError(_dioErrorMessage(error));
+    }
   }
 
   Future<Object?> _generateMimoChunk({
