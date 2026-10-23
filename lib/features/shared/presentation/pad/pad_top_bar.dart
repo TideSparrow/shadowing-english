@@ -11,6 +11,7 @@ class PadTopBar extends ConsumerWidget {
     super.key,
     this.leading,
     this.trailing,
+    this.actions = const <Widget>[],
     this.subtitle,
     this.description,
     this.onTimerPressed,
@@ -22,6 +23,7 @@ class PadTopBar extends ConsumerWidget {
   final String? description;
   final Widget? leading;
   final Widget? trailing;
+  final List<Widget> actions;
   final VoidCallback? onTimerPressed;
   final VoidCallback? onStreakPressed;
 
@@ -110,6 +112,8 @@ class PadTopBar extends ConsumerWidget {
               ),
             ),
           ),
+          ...actions,
+          if (actions.isNotEmpty) const SizedBox(width: 8),
           if (trailing != null)
             trailing!
           else

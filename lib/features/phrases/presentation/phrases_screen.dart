@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../router/app_router.dart';
+import '../../anki_export/presentation/anki_export_sheet.dart';
 import '../../daily_review/presentation/daily_review_provider.dart';
 import '../../library/presentation/library_catalog_provider.dart';
 import '../../library/presentation/library_mock_data.dart';
@@ -61,6 +62,7 @@ class _PhrasesScreenState extends ConsumerState<PhrasesScreen> {
       currentDestination: AppNavDestination.phrases,
       topBar: PadTopBar(
         title: '短语库',
+        actions: const <Widget>[AnkiExportButton()],
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[

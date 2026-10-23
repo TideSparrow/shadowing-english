@@ -69,6 +69,7 @@ Short loops keep auditory recognition and spoken output together. A few lines at
 - **Full word-by-word transcript**: The active sentence and word follow playback in the complete transcript reader.
 - **Tap words in video subtitles**: Look up words directly from the subtitle over the video.
 - **Saved words and phrases**: Keep useful vocabulary and expressions in dedicated review spaces.
+- **Anki export**: Export saved words and phrases as a ready-to-import `.apkg` deck or TSV/CSV, including pronunciation, meaning, multiple subtitle contexts, translations, and episode timestamps.
 - **Shadowing practice**: Record each shadowing session as part of your learning activity.
 - **Learning progress**: Track study time, sentences, phrases, course progress, levels, and achievements.
 - **Optional AI subtitles**: Generate or switch subtitles for videos without them using your own provider configuration.

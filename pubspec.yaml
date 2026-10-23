@@ -82,6 +82,10 @@ dependencies:
     path: third_party/flutter_tts
   alphabet_list_view: ^1.2.1
   fsrs: 2.0.1
+  archive: ^4.5.2
+  html: ^0.15.6
+  sqlite3: 3.5.2 # Keep aligned with assets/anki/sqlite3.wasm.
+  share_plus: 11.1.0
 
 
 dev_dependencies:
@@ -118,6 +122,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/anki/sqlite3.wasm
     - assets/dictionary/
     - assets/translations/
     - assets/img/

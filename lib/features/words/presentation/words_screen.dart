@@ -4,6 +4,7 @@ import 'package:alphabet_list_view/alphabet_list_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../anki_export/presentation/anki_export_sheet.dart';
 import '../../navigation/presentation/navigation_destination.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../../shared/presentation/pad/pad_scaffold.dart';
@@ -128,7 +129,10 @@ class _WordsScreenState extends ConsumerState<WordsScreen> {
 
     return PadScaffold(
       currentDestination: AppNavDestination.words,
-      topBar: const PadTopBar(title: '单词本'),
+      topBar: const PadTopBar(
+        title: '单词本',
+        actions: <Widget>[AnkiExportButton()],
+      ),
       body: Padding(
         padding: EdgeInsets.all(
           MediaQuery.sizeOf(context).width < 600 ? 16 : 24,
