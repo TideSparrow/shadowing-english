@@ -11,14 +11,14 @@
 [English](README_EN.md) · 中文
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-0F766E.svg)](LICENSE)
-[![CI](https://github.com/MarkYuanGo/shadowing-english/actions/workflows/lint.yaml/badge.svg)](https://github.com/MarkYuanGo/shadowing-english/actions/workflows/lint.yaml)
+[![CI](https://github.com/TideSparrow/shadowing-english/actions/workflows/lint.yaml/badge.svg)](https://github.com/TideSparrow/shadowing-english/actions/workflows/lint.yaml)
 [![Flutter 3.44.4](https://img.shields.io/badge/Flutter-3.44.4-02569B?logo=flutter&logoColor=white)](.fvmrc)
-[![Latest release](https://img.shields.io/github/v/release/MarkYuanGo/shadowing-english?display_name=tag&sort=semver)](https://github.com/MarkYuanGo/shadowing-english/releases/latest)
-[![Release platforms](https://img.shields.io/badge/Release-Android%20%7C%20macOS%20%7C%20Linux%20%7C%20Windows-475569)](https://github.com/MarkYuanGo/shadowing-english/releases/latest)
-[![GitHub stars](https://img.shields.io/github/stars/MarkYuanGo/shadowing-english?style=flat)](https://github.com/MarkYuanGo/shadowing-english/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/MarkYuanGo/shadowing-english)](https://github.com/MarkYuanGo/shadowing-english/issues)
+[![Latest release](https://img.shields.io/github/v/release/TideSparrow/shadowing-english?display_name=tag&sort=semver)](https://github.com/TideSparrow/shadowing-english/releases/latest)
+[![Release platforms](https://img.shields.io/badge/Release-Android%20%7C%20macOS%20%7C%20Linux%20%7C%20Windows-475569)](https://github.com/TideSparrow/shadowing-english/releases/latest)
+[![GitHub stars](https://img.shields.io/github/stars/TideSparrow/shadowing-english?style=flat)](https://github.com/TideSparrow/shadowing-english/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/TideSparrow/shadowing-english)](https://github.com/TideSparrow/shadowing-english/issues)
 
-[下载最新版](https://github.com/MarkYuanGo/shadowing-english/releases/latest) · [字幕功能说明](#字幕功能从导入到逐词跟读) · [从源码运行](#从源码运行) · [导入学习素材](#导入学习素材)
+[下载最新版](https://github.com/TideSparrow/shadowing-english/releases/latest) · [字幕功能说明](#字幕功能从导入到逐词跟读) · [从源码运行](#从源码运行) · [导入学习素材](#导入学习素材)
 
 ## 功能截图
 
@@ -126,14 +126,14 @@ AI 识别仍可能受到背景音乐、多人重叠说话、口音和录音质�
 
 ### 下载应用
 
-最新版为 [v0.1.1](https://github.com/MarkYuanGo/shadowing-english/releases/tag/v0.1.1)，已提供以下安装包：
+[最新正式版](https://github.com/TideSparrow/shadowing-english/releases/latest)提供以下安装包：
 
 - Android：APK
 - macOS：DMG
 - Linux：x64 `.tar.gz`
 - Windows：x64 `.zip`
 
-前往 [Releases](https://github.com/MarkYuanGo/shadowing-english/releases/latest) 选择对应平台下载。
+前往 [Releases](https://github.com/TideSparrow/shadowing-english/releases/latest) 选择对应平台下载。
 
 从 v0.1.2 起，每个版本附带 `SHA256SUMS.txt`，可用于校验下载文件是否完整。
 
@@ -144,7 +144,7 @@ AI 识别仍可能受到背景音乐、多人重叠说话、口音和录音质�
 需要 Flutter 3.44.4；仓库通过 FVM 固定版本。首次使用请先安装 [FVM](https://fvm.app/documentation/getting-started/installation)。
 
 ```bash
-git clone https://github.com/MarkYuanGo/shadowing-english.git
+git clone https://github.com/TideSparrow/shadowing-english.git
 cd shadowing-english
 fvm use 3.44.4
 fvm flutter pub get
@@ -182,7 +182,7 @@ Friends-S01E01.zh.srt
 
 ## 参与贡献
 
-欢迎提交 [Issue](https://github.com/MarkYuanGo/shadowing-english/issues)，尤其是字幕匹配、播放器与跨平台问题。准备 Pull Request 前，建议先开 Issue 讨论；请不要提交未经授权的视频、字幕或课程资源。
+欢迎提交 [Issue](https://github.com/TideSparrow/shadowing-english/issues)，尤其是字幕匹配、播放器与跨平台问题。准备 Pull Request 前，建议先开 Issue 讨论；请不要提交未经授权的视频、字幕或课程资源。
 
 ## License
 

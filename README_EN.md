@@ -11,14 +11,14 @@
 English · [中文](README.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-0F766E.svg)](LICENSE)
-[![CI](https://github.com/MarkYuanGo/shadowing-english/actions/workflows/lint.yaml/badge.svg)](https://github.com/MarkYuanGo/shadowing-english/actions/workflows/lint.yaml)
+[![CI](https://github.com/TideSparrow/shadowing-english/actions/workflows/lint.yaml/badge.svg)](https://github.com/TideSparrow/shadowing-english/actions/workflows/lint.yaml)
 [![Flutter 3.44.4](https://img.shields.io/badge/Flutter-3.44.4-02569B?logo=flutter&logoColor=white)](.fvmrc)
-[![Latest release](https://img.shields.io/github/v/release/MarkYuanGo/shadowing-english?display_name=tag&sort=semver)](https://github.com/MarkYuanGo/shadowing-english/releases/latest)
-[![Release platforms](https://img.shields.io/badge/Release-Android%20%7C%20macOS%20%7C%20Linux%20%7C%20Windows-475569)](https://github.com/MarkYuanGo/shadowing-english/releases/latest)
-[![GitHub stars](https://img.shields.io/github/stars/MarkYuanGo/shadowing-english?style=flat)](https://github.com/MarkYuanGo/shadowing-english/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/MarkYuanGo/shadowing-english)](https://github.com/MarkYuanGo/shadowing-english/issues)
+[![Latest release](https://img.shields.io/github/v/release/TideSparrow/shadowing-english?display_name=tag&sort=semver)](https://github.com/TideSparrow/shadowing-english/releases/latest)
+[![Release platforms](https://img.shields.io/badge/Release-Android%20%7C%20macOS%20%7C%20Linux%20%7C%20Windows-475569)](https://github.com/TideSparrow/shadowing-english/releases/latest)
+[![GitHub stars](https://img.shields.io/github/stars/TideSparrow/shadowing-english?style=flat)](https://github.com/TideSparrow/shadowing-english/stargazers)
+[![GitHub issues](https://img.shields.io/github/issues/TideSparrow/shadowing-english)](https://github.com/TideSparrow/shadowing-english/issues)
 
-[Download the latest release](https://github.com/MarkYuanGo/shadowing-english/releases/latest) · [Subtitle guide](#subtitles-from-import-to-word-level-shadowing) · [Run from source](#run-from-source) · [Import learning materials](#import-learning-materials)
+[Download the latest release](https://github.com/TideSparrow/shadowing-english/releases/latest) · [Subtitle guide](#subtitles-from-import-to-word-level-shadowing) · [Run from source](#run-from-source) · [Import learning materials](#import-learning-materials)
 
 ## Screenshots
 
@@ -126,14 +126,14 @@ AI recognition can still be affected by background music, overlapping speakers, 
 
 ### Download
 
-The latest release is [v0.1.1](https://github.com/MarkYuanGo/shadowing-english/releases/tag/v0.1.1). It includes packages for:
+The [latest stable release](https://github.com/TideSparrow/shadowing-english/releases/latest) includes packages for:
 
 - Android: APK
 - macOS: DMG
 - Linux: x64 `.tar.gz`
 - Windows: x64 `.zip`
 
-Visit [Releases](https://github.com/MarkYuanGo/shadowing-english/releases/latest) to download the package for your platform.
+Visit [Releases](https://github.com/TideSparrow/shadowing-english/releases/latest) to download the package for your platform.
 
 Starting with v0.1.2, each release includes `SHA256SUMS.txt` to verify downloaded files.
 
@@ -142,7 +142,7 @@ Starting with v0.1.2, each release includes `SHA256SUMS.txt` to verify downloade
 Flutter 3.44.4 is required and pinned through FVM. Install [FVM](https://fvm.app/documentation/getting-started/installation) before the first run.
 
 ```bash
-git clone https://github.com/MarkYuanGo/shadowing-english.git
+git clone https://github.com/TideSparrow/shadowing-english.git
 cd shadowing-english
 fvm use 3.44.4
 fvm flutter pub get
@@ -180,7 +180,7 @@ Read [RESOURCE_SETUP.md](RESOURCE_SETUP.md) for more detail. This repository doe
 
 ## Contributing
 
-[Issues](https://github.com/MarkYuanGo/shadowing-english/issues) are welcome, especially for subtitle matching, playback, and cross-platform problems. Please open an Issue before a substantial pull request, and do not submit unauthorized video, subtitle, or course resources.
+[Issues](https://github.com/TideSparrow/shadowing-english/issues) are welcome, especially for subtitle matching, playback, and cross-platform problems. Please open an Issue before a substantial pull request, and do not submit unauthorized video, subtitle, or course resources.
 
 ## License
 

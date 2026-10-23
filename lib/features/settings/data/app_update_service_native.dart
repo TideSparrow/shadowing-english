@@ -8,7 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
 const String _releasesUrl =
-    'https://api.github.com/repos/MarkYuanGo/shadowing-english/releases?per_page=100';
+    'https://api.github.com/repos/TideSparrow/shadowing-english/releases?per_page=100';
 
 class AppUpdate {
   const AppUpdate({
