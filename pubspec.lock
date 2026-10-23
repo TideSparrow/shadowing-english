@@ -596,6 +596,14 @@ packages:
       url: "https://mirrors.cloud.tencent.com/dart-pub/"
     source: hosted
     version: "4.1.0"
+  fsrs:
+    dependency: "direct main"
+    description:
+      name: fsrs
+      sha256: b50dbee450a424dbac4fb0f49cae25ff2e4e6d01844caa1ec0c26de5baba8071
+      url: "https://mirrors.cloud.tencent.com/dart-pub/"
+    source: hosted
+    version: "2.0.1"
   gap:
     dependency: "direct main"
     description:

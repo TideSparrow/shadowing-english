@@ -140,7 +140,7 @@ void main() {
     expect(find.text('待复习 2'), findsOneWidget);
     expect(find.text('今天复习'), findsWidgets);
 
-    await tester.tap(find.text('开始复习'));
+    await tester.tap(find.text('每日复习'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('pad-sidebar-header')), findsNothing);
@@ -167,7 +167,7 @@ void main() {
   ) async {
     await pumpPhrases(tester, const Size(1280, 800));
 
-    await tester.tap(find.text('开始复习'));
+    await tester.tap(find.text('每日复习'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('显示英文答案'));
     await tester.pumpAndSettle();
@@ -181,7 +181,7 @@ void main() {
   ) async {
     await pumpPhrases(tester, const Size(1280, 800));
 
-    await tester.tap(find.text('开始复习'));
+    await tester.tap(find.text('每日复习'));
     await tester.pumpAndSettle();
 
     expect(find.text('上一条'), findsOneWidget);
@@ -219,7 +219,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.text('开始复习'));
+    await tester.tap(find.text('每日复习'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('播放原句'));
     await tester.pumpAndSettle();
@@ -239,7 +239,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.text('开始复习'));
+    await tester.tap(find.text('每日复习'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开原视频'));
     await tester.pumpAndSettle();

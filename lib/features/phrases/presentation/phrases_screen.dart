@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../router/app_router.dart';
+import '../../daily_review/presentation/daily_review_provider.dart';
 import '../../library/presentation/library_catalog_provider.dart';
 import '../../library/presentation/library_mock_data.dart';
 import '../../navigation/presentation/navigation_destination.dart';
@@ -158,11 +159,15 @@ class _PhrasesScreenState extends ConsumerState<PhrasesScreen> {
                       onSpeak: () => _toggleSpeak(phrase),
                       onEdit: () => _showPhraseDialog(phrase),
                       onDelete: () => _confirmDelete(phrase),
-                      onMarkForReview: () {
-                        ref
-                            .read(phraseBookProvider.notifier)
-                            .markForReview(phrase.id);
-                        _showMessage('已加入今天复习');
+                      onMarkForReview: () async {
+                        try {
+                          await ref
+                              .read(dailyReviewProvider.notifier)
+                              .reviewToday('phrase:${phrase.id}');
+                          if (mounted) _showMessage('已加入每日复习，新内容按每日额度安排');
+                        } catch (_) {
+                          if (mounted) _showMessage('未能保存，请重试');
+                        }
                       },
                       onOpenSource: () =>
                           _jumpToSource(context, catalog, phrase),
@@ -446,7 +451,7 @@ class _TodayReviewBanner extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           reviewCount == 0
-              ? '可以自由复习，或去播放器收藏新表达。'
+              ? '每日复习会统一安排收藏的单词和短语。'
               : phone
               ? '约 ${reviewCount * 2} 分钟'
               : '预计 ${reviewCount * 2} 分钟，把看懂变成会用。',
@@ -457,7 +462,7 @@ class _TodayReviewBanner extends StatelessWidget {
     final Widget action = FilledButton.icon(
       onPressed: onPressed,
       icon: const Icon(Icons.play_arrow_rounded),
-      label: Text(reviewCount == 0 ? '自由复习' : '开始复习'),
+      label: const Text('每日复习'),
       style: FilledButton.styleFrom(
         backgroundColor: AppDesignTokens.brandGreen,
         foregroundColor: Colors.white,

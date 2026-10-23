@@ -5,12 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../features/authentication/presentation/login/login_screen.dart';
+import '../features/daily_review/presentation/daily_review_screen.dart';
 import '../features/growth/presentation/growth_screen.dart';
 import '../features/guide/presentation/guide_screen.dart';
 import '../features/home/presentation/pad_home_screen.dart';
 import '../features/import_course/presentation/import_course_screen.dart';
 import '../features/library/presentation/library_screen.dart';
-import '../features/phrases/presentation/phrase_review_screen.dart';
 import '../features/phrases/presentation/phrases_screen.dart';
 import '../features/player/presentation/player_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
@@ -23,6 +23,8 @@ enum SGRoute {
   home,
   library,
   growth,
+  review,
+  reviewSession,
   phrases,
   words,
   phraseReview,
@@ -36,7 +38,9 @@ enum SGRoute {
   editProfile,
   changePassword;
 
-  String get route => '/${toString().replaceAll('SGRoute.', '')}';
+  String get route => this == reviewSession
+      ? '/review/session'
+      : '/${toString().replaceAll('SGRoute.', '')}';
   String get name => toString().replaceAll('SGRoute.', '');
 }
 
@@ -73,6 +77,20 @@ GoRouter goRouter(Ref ref) => GoRouter(
           const GrowthScreen(),
     ).fade(),
     GoRoute(
+      path: SGRoute.review.route,
+      name: SGRoute.review.name,
+      builder: (BuildContext context, GoRouterState state) =>
+          const DailyReviewScreen(),
+    ).fade(),
+    GoRoute(
+      path: SGRoute.reviewSession.route,
+      name: SGRoute.reviewSession.name,
+      builder: (BuildContext context, GoRouterState state) => DailyReviewScreen(
+        session: true,
+        practice: state.uri.queryParameters['practice'] == '1',
+      ),
+    ).fade(),
+    GoRoute(
       path: SGRoute.phrases.route,
       builder: (BuildContext context, GoRouterState state) =>
           const PhrasesScreen(),
@@ -86,7 +104,7 @@ GoRouter goRouter(Ref ref) => GoRouter(
       path: SGRoute.phraseReview.route,
       name: SGRoute.phraseReview.name,
       builder: (BuildContext context, GoRouterState state) =>
-          const PhraseReviewScreen(),
+          const DailyReviewScreen(),
     ).fade(),
     GoRoute(
       path: SGRoute.guide.route,

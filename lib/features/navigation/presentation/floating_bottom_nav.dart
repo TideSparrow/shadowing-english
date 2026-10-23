@@ -16,6 +16,7 @@ class FloatingBottomNav extends StatelessWidget {
         AppNavDestination.home,
         AppNavDestination.library,
         AppNavDestination.growth,
+        AppNavDestination.review,
       ];
 
   @override
@@ -25,15 +26,10 @@ class FloatingBottomNav extends StatelessWidget {
     final bool compact = width < 768;
     final bool useMoreMenu = size.height > size.width;
     final List<AppNavDestination> allDestinations = AppNavDestination.values
-        .where(
-          (AppNavDestination destination) => destination.showInNav,
-        )
+        .where((AppNavDestination destination) => destination.showInNav)
         .toList(growable: false);
     final List<AppNavDestination> destinations = allDestinations
-        .where(
-          (AppNavDestination destination) =>
-              destination.showInBottomNav,
-        )
+        .where((AppNavDestination destination) => destination.showInBottomNav)
         .toList(growable: false);
     final List<AppNavDestination> secondaryDestinations = allDestinations
         .where(

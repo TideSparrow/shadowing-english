@@ -26,6 +26,14 @@ enum AppNavDestination {
     icon: LucideIcons.sprout,
     activeIcon: LucideIcons.trophy,
   ),
+  review(
+    route: '/review',
+    label: '复习',
+    title: '每日复习',
+    subtitle: '统一安排收藏的单词和短语，继续未完成的记忆练习。',
+    icon: Icons.event_repeat_outlined,
+    activeIcon: Icons.event_repeat_rounded,
+  ),
   phrases(
     route: '/phrases',
     label: '短语',
