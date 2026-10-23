@@ -194,6 +194,144 @@ void main() {
       expect(course.coverImage, '');
     });
 
+    test(
+      'recent courses follow actual playback time, including rewatches, and survive restart',
+      () async {
+        final ProviderContainer container = ProviderContainer();
+        addTearDown(container.dispose);
+        final LibraryCatalogNotifier notifier = container.read(
+          libraryCatalogProvider.notifier,
+        );
+        await notifier.importCourseFromMatches(
+          rows: <ImportMatchRow>[
+            _makeRow(videoPath: '/tmp/peppa/01.mp4', videoFile: '01.mp4'),
+          ],
+          videoFolder: '/tmp/peppa',
+          subtitleFolder: '/tmp/peppa',
+        );
+        final LibraryCourseData peppa = container
+            .read(libraryCatalogProvider)
+            .first;
+        await notifier.importCourseFromMatches(
+          rows: <ImportMatchRow>[
+            _makeRow(videoPath: '/tmp/sheldon/01.mp4', videoFile: '01.mp4'),
+          ],
+          videoFolder: '/tmp/sheldon',
+          subtitleFolder: '/tmp/sheldon',
+        );
+        final LibraryCourseData sheldon = container
+            .read(libraryCatalogProvider)
+            .first;
+        expect(
+          container
+              .read(recentLearningCoursesProvider)
+              .map((LibraryCourseData course) => course.id),
+          <String>[sheldon.id, peppa.id],
+        );
+        expect(
+          container
+              .read(libraryCatalogProvider)
+              .every(
+                (LibraryCourseData course) => course.lastStudiedAtMs == null,
+              ),
+          isTrue,
+        );
+        final DateTime start = DateTime.utc(2026, 10, 23);
+        await notifier.updateEpisodeProgress(
+          episodeId: peppa.episodes.first.id,
+          position: const Duration(seconds: 50),
+          duration: const Duration(seconds: 100),
+          occurredAt: start,
+        );
+        await notifier.updateEpisodeProgress(
+          episodeId: sheldon.episodes.first.id,
+          position: const Duration(seconds: 50),
+          duration: const Duration(seconds: 100),
+          occurredAt: start.add(const Duration(seconds: 1)),
+        );
+        expect(
+          container.read(recentLearningCoursesProvider).first.id,
+          sheldon.id,
+        );
+        final DateTime replayedAt = start.add(const Duration(seconds: 2));
+        await notifier.updateEpisodeProgress(
+          episodeId: peppa.episodes.first.id,
+          position: const Duration(seconds: 10),
+          duration: const Duration(seconds: 100),
+          occurredAt: replayedAt,
+        );
+        expect(
+          container.read(recentLearningCoursesProvider).first.id,
+          peppa.id,
+        );
+        expect(container.read(libraryCatalogProvider).first.id, sheldon.id);
+        final LibraryCourseData replayed = container
+            .read(recentLearningCoursesProvider)
+            .first;
+        expect(replayed.lastStudiedAtMs, replayedAt.millisecondsSinceEpoch);
+        expect(replayed.episodes.first.progressPercent, 50);
+        // Equal timestamps keep the catalog order, instead of shuffling cards.
+        await notifier.updateEpisodeProgress(
+          episodeId: sheldon.episodes.first.id,
+          position: const Duration(seconds: 10),
+          duration: const Duration(seconds: 100),
+          occurredAt: replayedAt,
+        );
+        expect(
+          container
+              .read(recentLearningCoursesProvider)
+              .map((LibraryCourseData course) => course.id),
+          <String>[sheldon.id, peppa.id],
+        );
+        final ProviderContainer restored = ProviderContainer();
+        addTearDown(restored.dispose);
+        expect(
+          restored
+              .read(libraryCatalogProvider)
+              .every(
+                (LibraryCourseData course) =>
+                    course.lastStudiedAtMs == replayedAt.millisecondsSinceEpoch,
+              ),
+          isTrue,
+        );
+        expect(
+          restored
+              .read(recentLearningCoursesProvider)
+              .map((LibraryCourseData course) => course.id),
+          <String>[sheldon.id, peppa.id],
+        );
+        // Older saved libraries remain readable without the new field.
+        final List<dynamic> oldData =
+            jsonDecode(
+                  Hive.box<String>('prefs').get('imported_library_courses_v1')!,
+                )
+                as List<dynamic>;
+        for (final dynamic course in oldData) {
+          (course as Map<String, dynamic>).remove('lastStudiedAtMs');
+        }
+        await Hive.box<String>(
+          'prefs',
+        ).put('imported_library_courses_v1', jsonEncode(oldData));
+        final ProviderContainer legacy = ProviderContainer();
+        addTearDown(legacy.dispose);
+        expect(legacy.read(libraryCatalogProvider).length, 2);
+        expect(
+          legacy
+              .read(libraryCatalogProvider)
+              .every(
+                (LibraryCourseData course) => course.lastStudiedAtMs == null,
+              ),
+          isTrue,
+        );
+        expect(
+          legacy
+              .read(recentLearningCoursesProvider)
+              .map((LibraryCourseData course) => course.id),
+          <String>[sheldon.id, peppa.id],
+        );
+      },
+    );
+
     test('playing an episode updates its course completion', () async {
       final ProviderContainer container = ProviderContainer();
       addTearDown(container.dispose);

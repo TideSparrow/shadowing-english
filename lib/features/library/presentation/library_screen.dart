@@ -9,6 +9,7 @@ import '../../import_course/presentation/widgets/import_course_flow.dart';
 import '../../navigation/presentation/navigation_destination.dart';
 import '../../player/presentation/asr_subtitle_cache.dart';
 import '../../player/presentation/full_transcript_reader.dart';
+import '../../player/presentation/learning_resume_provider.dart';
 import '../../player/presentation/player_course_lookup.dart';
 import '../../player/presentation/player_mock_state.dart';
 import '../../player/presentation/player_subtitle_loader.dart';
@@ -244,7 +245,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             orElse: () => visibleEpisodes.first,
           );
 
+    final bool canContinueLearning =
+        ref.watch(continueLearningTargetProvider) != null;
     return PadScaffold(
+      showContinueLearning: !showDetail,
       currentDestination: AppNavDestination.library,
       topBar: PadTopBar(
         title: showImport
@@ -810,7 +814,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     if (showScrollToTop)
                       Positioned(
                         right: pagePadding,
-                        bottom: compact ? 24 : 28,
+                        bottom: canContinueLearning
+                            ? (compact ? 96 : 100)
+                            : (compact ? 24 : 28),
                         child: FloatingActionButton.small(
                           onPressed: () {
                             listScrollController.animateTo(

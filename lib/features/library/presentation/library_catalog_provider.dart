@@ -15,7 +15,26 @@ libraryCatalogProvider =
       LibraryCatalogNotifier.new,
     );
 
+final Provider<List<LibraryCourseData>> recentLearningCoursesProvider =
+    Provider<List<LibraryCourseData>>((Ref ref) {
+      final List<MapEntry<int, LibraryCourseData>> courses =
+          ref.watch(libraryCatalogProvider).asMap().entries.toList()..sort((
+            MapEntry<int, LibraryCourseData> a,
+            MapEntry<int, LibraryCourseData> b,
+          ) {
+            final int byTime = (b.value.lastStudiedAtMs ?? 0).compareTo(
+              a.value.lastStudiedAtMs ?? 0,
+            );
+            return byTime == 0 ? a.key.compareTo(b.key) : byTime;
+          });
+      return courses
+          .map((MapEntry<int, LibraryCourseData> item) => item.value)
+          .toList(growable: false);
+    });
+
 class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
+  String? _lastStudiedCourseId;
+
   @override
   List<LibraryCourseData> build() {
     const List<LibraryCourseData> baseCatalog = libraryCourses;
@@ -78,6 +97,7 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
     required String episodeId,
     required Duration position,
     required Duration duration,
+    DateTime? occurredAt,
   }) async {
     if (duration <= Duration.zero || position <= Duration.zero) {
       return;
@@ -86,16 +106,30 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
         ((position.inMilliseconds * 100) / duration.inMilliseconds)
             .round()
             .clamp(0, 100);
+    final int studiedAtMs =
+        (occurredAt ?? DateTime.now()).millisecondsSinceEpoch;
     bool changed = false;
-    state = state
+    final List<LibraryCourseData> updated = state
         .map((LibraryCourseData course) {
           final LibraryEpisodeItem? current = course.episodes
               .where((LibraryEpisodeItem item) => item.id == episodeId)
               .firstOrNull;
-          if (current == null || nextProgress <= current.progressPercent) {
-            return course;
-          }
+          if (current == null) return course;
+          final bool progressChanged = nextProgress > current.progressPercent;
+          // Record rewatching too, without writing to disk on every video tick.
+          final bool refreshRecency =
+              _lastStudiedCourseId != course.id ||
+              course.lastStudiedAtMs == null ||
+              studiedAtMs - course.lastStudiedAtMs! >= 10000;
+          _lastStudiedCourseId = course.id;
+          if (!progressChanged && !refreshRecency) return course;
           changed = true;
+          if (!progressChanged) {
+            return course.copyWith(
+              lastStudiedAtMs: studiedAtMs,
+              lastStudiedStr: '刚刚学习',
+            );
+          }
           final List<LibraryEpisodeItem> episodes = course.episodes
               .map(
                 (LibraryEpisodeItem item) => item.id == episodeId
@@ -123,10 +157,12 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
             progressPercent: courseProgress,
             completedEpisodes: completedEpisodes,
             lastStudiedStr: '刚刚学习',
+            lastStudiedAtMs: studiedAtMs,
           );
         })
         .toList(growable: false);
     if (changed) {
+      state = updated;
       await _persistImportedCourses();
     }
   }
@@ -282,6 +318,7 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
       'completedEpisodes': course.completedEpisodes,
       'totalEpisodes': course.totalEpisodes,
       'lastStudiedStr': course.lastStudiedStr,
+      'lastStudiedAtMs': course.lastStudiedAtMs,
       'rating': course.rating,
       'episodes': course.episodes
           .map(
@@ -340,6 +377,7 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
               completedEpisodes: courseJson['completedEpisodes']! as int,
               totalEpisodes: episodes.length,
               lastStudiedStr: courseJson['lastStudiedStr']! as String,
+              lastStudiedAtMs: (courseJson['lastStudiedAtMs'] as num?)?.toInt(),
               rating: (courseJson['rating'] as num?)?.toDouble() ?? 0.0,
               episodes: episodes,
             );

@@ -4,25 +4,23 @@ import '../../../library/presentation/library_mock_data.dart';
 import '../../../library/presentation/widgets/library_course_poster.dart';
 import '../../../shared/presentation/pad/app_design_tokens.dart';
 import '../../../shared/presentation/pad/pad_compact.dart';
-import '../learning_dashboard_provider.dart';
 
 class PadHomeHero extends StatelessWidget {
   const PadHomeHero({
     required this.onTap,
     required this.course,
-    required this.stats,
+    required this.episode,
     super.key,
   });
 
   final VoidCallback onTap;
   final LibraryCourseData? course;
-  final LearningDashboardStats stats;
+  final LibraryEpisodeItem? episode;
 
   @override
   Widget build(BuildContext context) {
     final bool compact = context.isPadCompact;
     final bool narrow = MediaQuery.sizeOf(context).width < 720;
-    final LibraryEpisodeItem? episode = course?.episodes.firstOrNull;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -45,12 +43,7 @@ class PadHomeHero extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   _VideoPreview(course: course, episode: episode),
-                  _HeroDetails(
-                    onTap: onTap,
-                    course: course,
-                    episode: episode,
-                    stats: stats,
-                  ),
+                  _HeroDetails(onTap: onTap, course: course, episode: episode),
                 ],
               )
             : SizedBox(
@@ -67,7 +60,6 @@ class PadHomeHero extends StatelessWidget {
                         onTap: onTap,
                         course: course,
                         episode: episode,
-                        stats: stats,
                       ),
                     ),
                   ],
@@ -154,23 +146,17 @@ class _HeroDetails extends StatelessWidget {
     required this.onTap,
     required this.course,
     required this.episode,
-    required this.stats,
   });
 
   final VoidCallback onTap;
   final LibraryCourseData? course;
   final LibraryEpisodeItem? episode;
-  final LearningDashboardStats stats;
 
   @override
   Widget build(BuildContext context) {
     final bool compact = context.isPadCompact;
     final bool hasCourse = course != null;
-    final String progressTime =
-        episode?.progressTimeStr ??
-        (stats.todayStudyMinutes > 0
-            ? '${stats.todayStudyMinutes} 分钟'
-            : '从第 1 句开始');
+    final String progressTime = episode?.progressTimeStr ?? '从第 1 句开始';
 
     return Padding(
       padding: EdgeInsets.all(compact ? 18 : 20),

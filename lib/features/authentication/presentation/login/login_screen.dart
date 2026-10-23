@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../constants/assets.dart';
 import '../../../../router/app_router.dart';
+import '../../../shared/presentation/continue_learning_button.dart';
 import '../../domain/login_response.dart';
 import '../register/register_dialog.dart';
 import 'auth_ui_model.dart';
@@ -50,6 +51,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     });
     return Scaffold(
+      floatingActionButton: const ContinueLearningButton(),
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('Login'),

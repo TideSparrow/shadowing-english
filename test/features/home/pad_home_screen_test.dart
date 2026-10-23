@@ -82,6 +82,61 @@ void main() {
         await tester.pumpAndSettle();
       }
 
+      final ProviderContainer container = ProviderScope.containerOf(
+        tester.element(find.byType(PadHomeScreen)),
+      );
+      final LibraryCatalogNotifier catalog = container.read(
+        libraryCatalogProvider.notifier,
+      );
+      final DateTime studiedAt = DateTime.utc(2026, 10, 23);
+      await catalog.updateEpisodeProgress(
+        episodeId: 'sheldon-ep1',
+        position: const Duration(seconds: 10),
+        duration: const Duration(seconds: 100),
+        occurredAt: studiedAt,
+      );
+      await tester.pumpAndSettle();
+      final Finder sheldonCard = find.byKey(
+        const ValueKey<String>('recent-course-sheldon'),
+      );
+      final Finder peppaCard = find.byKey(
+        const ValueKey<String>('recent-course-peppa'),
+      );
+      await tester.scrollUntilVisible(
+        sheldonCard,
+        400,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey<String>('home-page-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(sheldonCard).dx,
+        lessThan(tester.getTopLeft(peppaCard).dx),
+      );
+      await catalog.updateEpisodeProgress(
+        episodeId: 'peppa-ep1',
+        position: const Duration(seconds: 10),
+        duration: const Duration(seconds: 100),
+        occurredAt: studiedAt.add(const Duration(seconds: 1)),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(peppaCard).dx,
+        lessThan(tester.getTopLeft(sheldonCard).dx),
+      );
+      await tester.tap(sheldonCard);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<PlayerScreen>(find.byType(PlayerScreen)).episodeId,
+        'sheldon-ep1',
+      );
+      router.pop();
+      await tester.pumpAndSettle();
+
       final Finder emptyCourse = find.byKey(
         const ValueKey<String>('recent-course-empty'),
       );

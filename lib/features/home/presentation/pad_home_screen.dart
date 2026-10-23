@@ -10,6 +10,7 @@ import '../../library/presentation/library_mock_data.dart';
 import '../../library/presentation/widgets/library_course_poster.dart';
 import '../../navigation/presentation/navigation_destination.dart';
 import '../../phrases/presentation/phrase_book_provider.dart';
+import '../../player/presentation/learning_resume_provider.dart';
 import '../../shared/presentation/app_loading_overlay.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../../shared/presentation/pad/pad_scaffold.dart';
@@ -31,16 +32,22 @@ class _PadHomeScreenState extends ConsumerState<PadHomeScreen> {
   Widget build(BuildContext context) {
     final LearningDashboardStats stats = ref.watch(learningDashboardProvider);
     final UserGrowth growth = ref.watch(userGrowthProvider);
-    final List<LibraryCourseData> courses = ref.watch(libraryCatalogProvider);
+    final List<LibraryCourseData> courses = ref.watch(
+      recentLearningCoursesProvider,
+    );
     final List<PhraseEntry> savedItems = ref.watch(phraseBookProvider);
-    final LibraryCourseData? currentCourse = courses
-        .where((LibraryCourseData course) => course.episodes.isNotEmpty)
-        .firstOrNull;
+    final ContinueLearningTarget? resumeTarget = ref.watch(
+      continueLearningTargetProvider,
+    );
     final double width = MediaQuery.sizeOf(context).width;
     final bool compact = width < 900;
     final double pagePadding = compact ? 20 : 32;
 
-    void openCourse(LibraryCourseData? course) {
+    void openCourse(
+      LibraryCourseData? course, {
+      LibraryEpisodeItem? episode,
+      bool autoPlay = false,
+    }) {
       if (course == null) {
         openImportCourseExperience(context);
         return;
@@ -51,7 +58,7 @@ class _PadHomeScreenState extends ConsumerState<PadHomeScreen> {
         ).showSnackBar(const SnackBar(content: Text('该课程暂无可播放的剧集')));
         return;
       }
-      final String episodeId = course.episodes.first.id;
+      final String episodeId = episode?.id ?? course.episodes.first.id;
       if (_isOpeningEpisode) {
         return;
       }
@@ -66,6 +73,7 @@ class _PadHomeScreenState extends ConsumerState<PadHomeScreen> {
             .pushNamed(
               SGRoute.player.name,
               pathParameters: <String, String>{'episodeId': episodeId},
+              queryParameters: <String, String>{if (autoPlay) 'autoplay': '1'},
             )
             .then((_) {
               if (!mounted) {
@@ -91,9 +99,13 @@ class _PadHomeScreenState extends ConsumerState<PadHomeScreen> {
             _GreetingHeader(stats: stats, growth: growth),
             SizedBox(height: compact ? 24 : 28),
             PadHomeHero(
-              onTap: () => openCourse(currentCourse),
-              course: currentCourse,
-              stats: stats,
+              onTap: () => openCourse(
+                resumeTarget?.course,
+                episode: resumeTarget?.episode,
+                autoPlay: true,
+              ),
+              course: resumeTarget?.course,
+              episode: resumeTarget?.episode,
             ),
             SizedBox(height: compact ? 26 : 30),
             _SectionTitle(title: '今日挑战', compact: compact),

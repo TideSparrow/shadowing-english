@@ -25,6 +25,7 @@ import 'asr_subtitle_job.dart';
 import 'asr_subtitle_service.dart';
 import 'embedded_subtitle_reference.dart';
 import 'full_transcript_reader.dart';
+import 'learning_resume_provider.dart';
 import 'player_course_lookup.dart';
 import 'player_fullscreen_video_screen.dart';
 import 'player_media_source.dart';
@@ -182,6 +183,12 @@ class PadLandscapePlayerScreenState
       _usingAiSubtitles = false;
       _referenceSubtitleLines = resolvedLines;
     });
+    if (resource.episode != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || ModalRoute.of(context)?.isCurrent == false) return;
+        ref.read(lastLearningEpisodeProvider.notifier).record(widget.episodeId);
+      });
+    }
     await _initVideo();
     if (!mounted) {
       return;
@@ -694,6 +701,7 @@ class PadLandscapePlayerScreenState
     );
 
     return PadScaffold(
+      showContinueLearning: false,
       currentDestination: AppNavDestination.library,
       showNavigation: false,
       topBar: PlayerTopBar(

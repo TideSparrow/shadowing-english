@@ -8,6 +8,7 @@ import '../../player/presentation/asr_subtitle_cache.dart';
 import '../../player/presentation/asr_subtitle_job.dart';
 import '../../player/presentation/player_mock_state.dart';
 import '../../player/presentation/player_subtitle_loader.dart';
+import '../../shared/presentation/continue_learning_button.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../../shared/presentation/pad/pad_top_bar.dart';
 import 'settings_provider.dart';
@@ -51,6 +52,7 @@ class _AiSubtitleManagementScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: const ContinueLearningButton(),
       backgroundColor: AppDesignTokens.softWhite,
       body: Column(
         children: <Widget>[
@@ -815,6 +817,7 @@ class _AiSubtitleEditorScreenState extends State<AiSubtitleEditorScreen> {
   Widget build(BuildContext context) {
     final List<dynamic>? lines = _content?['lines'] as List<dynamic>?;
     return Scaffold(
+      floatingActionButton: const ContinueLearningButton(),
       backgroundColor: AppDesignTokens.softWhite,
       body: Column(
         children: <Widget>[

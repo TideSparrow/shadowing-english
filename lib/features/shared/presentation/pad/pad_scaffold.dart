@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../navigation/presentation/floating_bottom_nav.dart';
 import '../../../navigation/presentation/navigation_destination.dart';
+import '../continue_learning_button.dart';
 import 'app_design_tokens.dart';
 import 'pad_sidebar.dart';
 
@@ -13,6 +14,7 @@ class PadScaffold extends StatelessWidget {
     this.topBar,
     this.useBottomTabWhenPortrait = true,
     this.showNavigation = true,
+    this.showContinueLearning = true,
   });
 
   final AppNavDestination currentDestination;
@@ -20,6 +22,7 @@ class PadScaffold extends StatelessWidget {
   final Widget? topBar;
   final bool useBottomTabWhenPortrait;
   final bool showNavigation;
+  final bool showContinueLearning;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +41,9 @@ class PadScaffold extends StatelessWidget {
     if (showNavigation && useBottomNavigation && useBottomTabWhenPortrait) {
       return Scaffold(
         backgroundColor: AppDesignTokens.softWhite,
+        floatingActionButton: showContinueLearning
+            ? const ContinueLearningButton()
+            : null,
         body: SafeArea(top: false, bottom: false, child: content),
         bottomNavigationBar: FloatingBottomNav(current: currentDestination),
       );
@@ -45,6 +51,9 @@ class PadScaffold extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppDesignTokens.softWhite,
+      floatingActionButton: showContinueLearning
+          ? const ContinueLearningButton()
+          : null,
       body: SafeArea(
         top: false,
         child: Row(

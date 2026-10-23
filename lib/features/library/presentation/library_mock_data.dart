@@ -89,6 +89,7 @@ class LibraryCourseData {
     required this.completedEpisodes,
     required this.totalEpisodes,
     required this.lastStudiedStr,
+    this.lastStudiedAtMs,
     required this.rating,
     required this.episodes,
   });
@@ -105,6 +106,7 @@ class LibraryCourseData {
   final int completedEpisodes;
   final int totalEpisodes;
   final String lastStudiedStr;
+  final int? lastStudiedAtMs;
   final double rating;
   final List<LibraryEpisodeItem> episodes;
 
@@ -120,6 +122,7 @@ class LibraryCourseData {
     int? completedEpisodes,
     int? totalEpisodes,
     String? lastStudiedStr,
+    int? lastStudiedAtMs,
     double? rating,
     List<LibraryEpisodeItem>? episodes,
   }) {
@@ -136,6 +139,7 @@ class LibraryCourseData {
       completedEpisodes: completedEpisodes ?? this.completedEpisodes,
       totalEpisodes: totalEpisodes ?? this.totalEpisodes,
       lastStudiedStr: lastStudiedStr ?? this.lastStudiedStr,
+      lastStudiedAtMs: lastStudiedAtMs ?? this.lastStudiedAtMs,
       rating: rating ?? this.rating,
       episodes: episodes ?? this.episodes,
     );
