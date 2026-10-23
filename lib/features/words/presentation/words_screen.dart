@@ -8,6 +8,7 @@ import '../../navigation/presentation/navigation_destination.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../../shared/presentation/pad/pad_scaffold.dart';
 import '../../shared/presentation/pad/pad_top_bar.dart';
+import '../../shared/presentation/pill_segmented_control.dart';
 import 'word_book_provider.dart';
 import 'word_detail_screen.dart';
 
@@ -20,7 +21,7 @@ class WordsScreen extends ConsumerStatefulWidget {
 
 class _WordsScreenState extends ConsumerState<WordsScreen> {
   String _query = '';
-  bool _favoritesOnly = false;
+  bool _favoritesOnly = true;
 
   @override
   void initState() {
@@ -145,17 +146,25 @@ class _WordsScreenState extends ConsumerState<WordsScreen> {
                       .length,
                 ),
                 const SizedBox(height: 20),
+                SizedBox(
+                  key: const Key('words-view-tabs'),
+                  width: double.infinity,
+                  child: PillSegmentedControl<bool>(
+                    value: _favoritesOnly,
+                    options: const <SegmentOption<bool>>[
+                      SegmentOption<bool>(value: true, label: '已收藏'),
+                      SegmentOption<bool>(value: false, label: '全部单词'),
+                    ],
+                    onValueChanged: (bool value) =>
+                        setState(() => _favoritesOnly = value),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 TextField(
                   onChanged: (String value) => setState(() => _query = value),
                   decoration: InputDecoration(
-                    hintText: '搜索学过的单词',
+                    hintText: _favoritesOnly ? '搜索收藏的单词' : '搜索学过的单词',
                     prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: FilterChip(
-                      label: const Text('仅收藏'),
-                      selected: _favoritesOnly,
-                      onSelected: (bool value) =>
-                          setState(() => _favoritesOnly = value),
-                    ),
                     filled: true,
                     fillColor: Colors.white,
                     border: OutlineInputBorder(
@@ -167,8 +176,18 @@ class _WordsScreenState extends ConsumerState<WordsScreen> {
                 const SizedBox(height: 18),
                 Expanded(
                   child: filtered.isEmpty
-                      ? const Center(child: Text('播放带英文字幕的视频后，单词会自动出现在这里。'))
+                      ? Center(
+                          child: Text(
+                            _query.trim().isNotEmpty
+                                ? '没有找到匹配的单词，换个关键词试试。'
+                                : _favoritesOnly
+                                ? '还没有收藏单词，点击单词旁的收藏图标就能加入。'
+                                : '播放带英文字幕的视频后，单词会自动出现在这里。',
+                            textAlign: TextAlign.center,
+                          ),
+                        )
                       : AlphabetListView(
+                          key: ValueKey<bool>(_favoritesOnly),
                           items: _buildGroups(filtered),
                           options: AlphabetListViewOptions(
                             listOptions: ListOptions(
@@ -327,6 +346,13 @@ class _WordCard extends ConsumerWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
+  void _openDetails(BuildContext context) => unawaited(
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext context) => WordDetailDialog(word: entry.word),
+    ),
+  );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final String translation =
@@ -338,13 +364,7 @@ class _WordCard extends ConsumerWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () => unawaited(
-          showDialog<void>(
-            context: context,
-            builder: (BuildContext context) =>
-                WordDetailDialog(word: entry.word),
-          ),
-        ),
+        onTap: () => _openDetails(context),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
           child: Row(
@@ -408,6 +428,8 @@ class _WordCard extends ConsumerWidget {
                 tooltip: '更多操作',
                 onSelected: (_WordAction action) {
                   switch (action) {
+                    case _WordAction.details:
+                      _openDetails(context);
                     case _WordAction.edit:
                       onEdit();
                     case _WordAction.delete:
@@ -416,6 +438,10 @@ class _WordCard extends ConsumerWidget {
                 },
                 itemBuilder: (BuildContext context) =>
                     <PopupMenuEntry<_WordAction>>[
+                      const PopupMenuItem<_WordAction>(
+                        value: _WordAction.details,
+                        child: Text('查看详情'),
+                      ),
                       const PopupMenuItem<_WordAction>(
                         value: _WordAction.edit,
                         child: Text('编辑'),
@@ -438,4 +464,4 @@ class _WordCard extends ConsumerWidget {
   }
 }
 
-enum _WordAction { edit, delete }
+enum _WordAction { details, edit, delete }
