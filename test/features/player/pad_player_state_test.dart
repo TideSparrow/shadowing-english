@@ -451,7 +451,7 @@ void main() {
     expect(state.isPlaying, isTrue);
   });
 
-  testWidgets('player toggles speed and shows active subtitle line', (
+  testWidgets('player controls update speed, subtitle mode, and letter case', (
     WidgetTester tester,
   ) async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -522,6 +522,47 @@ void main() {
       tester.element(find.byType(PadLandscapePlayerScreen)),
     );
     expect(container.read(learningSettingsProvider).subtitleMode, '单英');
+
+    await tester.tap(find.byTooltip('字幕模式'));
+    await tester.pumpAndSettle();
+    expect(find.text('全部大写'), findsNothing);
+    expect(find.text('全部小写'), findsNothing);
+    await tester.tap(find.text('单英').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Aa'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('英文字幕大小写'));
+    await tester.pumpAndSettle();
+    expect(_hasCheckedMenuItem(tester, '保留原样'), isTrue);
+    await tester.tap(find.text('全部大写').last);
+    await tester.pumpAndSettle();
+    expect(container.read(learningSettingsProvider).subtitleLetterCase, '全部大写');
+    expect(find.text('DOING'), findsWidgets);
+    final PadLandscapePlayerScreenState playerState = tester.state(
+      find.byType(PadLandscapePlayerScreen),
+    );
+    expect(playerState.state.isPlaying, isFalse);
+    expect(
+      playerState.debugTranscriptReaderProgress.value.subtitleLetterCase,
+      '全部大写',
+    );
+    expect(
+      tester
+          .widget<PlayerVideoPanel>(find.byType(PlayerVideoPanel))
+          .subtitleLetterCase,
+      '全部大写',
+    );
+    expect(
+      tester
+          .widget<PlayerSubtitleList>(find.byType(PlayerSubtitleList))
+          .subtitleLetterCase,
+      '全部大写',
+    );
+    await tester.tap(find.byTooltip('英文字幕大小写'));
+    await tester.pumpAndSettle();
+    expect(_hasCheckedMenuItem(tester, '全部大写'), isTrue);
+    await tester.tap(find.text('保留原样').last);
+    await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.mic_none_rounded), findsNothing);
 
@@ -1089,59 +1130,103 @@ void main() {
     expect(find.text('逐句精听'), findsOneWidget);
   });
 
-  testWidgets('fullscreen subtitle mode syncs player state', (
-    WidgetTester tester,
-  ) async {
-    final PlayerMockState state = PlayerMockState()
-      ..loadLines(const <PlayerSubtitleLine>[
-        PlayerSubtitleLine(
-          startTime: '00:01',
-          english: 'Hello there.',
-          chinese: '你好。',
-          startMs: 1000,
-          endMs: 2500,
+  testWidgets(
+    'fullscreen subtitle controls sync mode and case without reopening',
+    (WidgetTester tester) async {
+      final ProviderContainer settings = ProviderContainer();
+      addTearDown(settings.dispose);
+      final PlayerMockState state = PlayerMockState()
+        ..loadLines(const <PlayerSubtitleLine>[
+          PlayerSubtitleLine(
+            startTime: '00:01',
+            english: 'Hello there.',
+            chinese: '你好。',
+            startMs: 1000,
+            endMs: 2500,
+          ),
+        ])
+        ..setSubtitleMode('双语')
+        ..selectLine(0);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlayerFullscreenVideoScreen(
+            playerState: state,
+            highlightWords: true,
+            isMuted: false,
+            volumeLevel: 1,
+            onTogglePlaying: state.togglePlaying,
+            onPreviousLine: state.previousLine,
+            onReplayLine: () => state.selectLine(state.activeLineIndex),
+            onNextLine: state.nextLine,
+            onSeekBackward: () {},
+            onSeekForward: () {},
+            onSelectLine: state.selectLine,
+            onSeek: (_) {},
+            onSpeedSelected: state.selectSpeed,
+            onSelectSubtitleMode: state.setSubtitleMode,
+            onSelectSubtitleLetterCase: settings
+                .read(learningSettingsProvider.notifier)
+                .setSubtitleLetterCase,
+            onToggleShadowing: state.toggleShadowing,
+            onToggleLoop: state.toggleLoop,
+            onToggleMuted: () {},
+            onVolumeChanged: (_) {},
+            onSubtitleLookupOpen: () {},
+            onCollectWord: (_) {},
+            episodes: const <LibraryEpisodeItem>[],
+            activeEpisodeId: 'episode-1',
+            onExit: () {},
+          ),
         ),
-      ])
-      ..setSubtitleMode('双语');
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: PlayerFullscreenVideoScreen(
-          playerState: state,
-          highlightWords: true,
-          isMuted: false,
-          volumeLevel: 1,
-          onTogglePlaying: state.togglePlaying,
-          onPreviousLine: state.previousLine,
-          onReplayLine: () => state.selectLine(state.activeLineIndex),
-          onNextLine: state.nextLine,
-          onSeekBackward: () {},
-          onSeekForward: () {},
-          onSelectLine: state.selectLine,
-          onSeek: (_) {},
-          onSpeedSelected: state.selectSpeed,
-          onSelectSubtitleMode: state.setSubtitleMode,
-          onToggleShadowing: state.toggleShadowing,
-          onToggleLoop: state.toggleLoop,
-          onToggleMuted: () {},
-          onVolumeChanged: (_) {},
-          onSubtitleLookupOpen: () {},
-          onCollectWord: (_) {},
-          episodes: const <LibraryEpisodeItem>[],
-          activeEpisodeId: 'episode-1',
-          onExit: () {},
-        ),
-      ),
-    );
+      await tester.tap(find.text('双语'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('单英').last, warnIfMissed: false);
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('双语'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('单英').last, warnIfMissed: false);
-    await tester.pumpAndSettle();
-
-    expect(find.text('单英'), findsOneWidget);
-    expect(state.subtitleMode, '单英');
-  });
+      expect(find.text('单英'), findsOneWidget);
+      expect(state.subtitleMode, '单英');
+      await tester.tap(find.byTooltip('英文字幕大小写'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('全部小写').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('全部小写').last);
+      await tester.pumpAndSettle();
+      expect(
+        settings.read(learningSettingsProvider).subtitleLetterCase,
+        '全部小写',
+      );
+      expect(find.text('hello'), findsOneWidget);
+      expect(
+        tester
+            .widget<PlayerVideoPanel>(find.byType(PlayerVideoPanel))
+            .subtitleLetterCase,
+        '全部小写',
+      );
+      await tester.tap(find.byIcon(Icons.subtitles_rounded));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<PlayerSubtitleList>(find.byType(PlayerSubtitleList))
+            .subtitleLetterCase,
+        '全部小写',
+      );
+      expect(find.text('hello'), findsNWidgets(2));
+      await tester.tap(find.byTooltip('英文字幕大小写'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('全部小写').last);
+      expect(_hasCheckedMenuItem(tester, '全部小写'), isTrue);
+      await tester.tap(find.text('句首字母大写').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Hello'), findsNWidgets(2));
+      expect(
+        settings.read(learningSettingsProvider).subtitleLetterCase,
+        '句首字母大写',
+      );
+    },
+  );
 
   testWidgets('active subtitle word is boxed when highlighting is enabled', (
     WidgetTester tester,

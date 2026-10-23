@@ -5,6 +5,11 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce/hive.dart';
 
+import '../../shared/domain/subtitle_letter_case.dart';
+
+export '../../shared/domain/subtitle_letter_case.dart'
+    show subtitleLetterCaseOptions;
+
 const List<String> playerFontOptions = <String>['小', '中', '大'];
 const List<String> subtitleWordHighlightStyleOptions = <String>[
   '绿色填充',
@@ -108,6 +113,7 @@ const Map<String, TranslationProviderPreset> asrProviderPresets =
 class LearningSettingsState {
   const LearningSettingsState({
     required this.subtitleMode,
+    this.subtitleLetterCase = '保留原样',
     required this.playbackSpeed,
     required this.fontSize,
     required this.subtitleDelayMs,
@@ -175,6 +181,7 @@ class LearningSettingsState {
   }
 
   final String subtitleMode;
+  final String subtitleLetterCase;
   final String playbackSpeed;
   final String fontSize;
   final int subtitleDelayMs;
@@ -205,6 +212,7 @@ class LearningSettingsState {
 
   LearningSettingsState copyWith({
     String? subtitleMode,
+    String? subtitleLetterCase,
     String? playbackSpeed,
     String? fontSize,
     int? subtitleDelayMs,
@@ -235,6 +243,7 @@ class LearningSettingsState {
   }) {
     return LearningSettingsState(
       subtitleMode: subtitleMode ?? this.subtitleMode,
+      subtitleLetterCase: subtitleLetterCase ?? this.subtitleLetterCase,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       fontSize: fontSize ?? this.fontSize,
       subtitleDelayMs: subtitleDelayMs ?? this.subtitleDelayMs,
@@ -368,6 +377,10 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
       final String? asrProvider = _asrProviderOrNull(json['asrProvider']);
       return defaults.copyWith(
         subtitleMode: _stringOrNull(json['subtitleMode']),
+        subtitleLetterCase:
+            subtitleLetterCaseOptions.contains(json['subtitleLetterCase'])
+            ? json['subtitleLetterCase'] as String
+            : null,
         playbackSpeed: _stringOrNull(json['playbackSpeed']),
         fontSize: _stringOrNull(json['fontSize']),
         subtitleDelayMs: _intOrNull(json['subtitleDelayMs']),
@@ -419,6 +432,12 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
       return;
     }
     state = state.copyWith(subtitleMode: value);
+    _persist();
+  }
+
+  void setSubtitleLetterCase(String value) {
+    if (!subtitleLetterCaseOptions.contains(value)) return;
+    state = state.copyWith(subtitleLetterCase: value);
     _persist();
   }
 
@@ -664,6 +683,7 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
         _learningSettingsStorageKey,
         jsonEncode(<String, Object?>{
           'subtitleMode': state.subtitleMode,
+          'subtitleLetterCase': state.subtitleLetterCase,
           'playbackSpeed': state.playbackSpeed,
           'fontSize': state.fontSize,
           'subtitleDelayMs': state.subtitleDelayMs,

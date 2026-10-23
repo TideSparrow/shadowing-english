@@ -7,6 +7,39 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod/src/framework.dart' show Override;
 
 void main() {
+  testWidgets('subtitle letter case can be changed from playback settings', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final ProviderContainer container = ProviderContainer();
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: SettingsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final Finder dropdown = find.byWidgetPredicate(
+      (Widget widget) =>
+          widget is DropdownButton<String> &&
+          (widget.items?.any(
+                (DropdownMenuItem<String> item) => item.value == '句首字母大写',
+              ) ??
+              false),
+    );
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+    expect(find.text('全部大写').last, findsOneWidget);
+    expect(find.text('句首字母大写').last, findsOneWidget);
+    await tester.tap(find.text('全部小写').last);
+    await tester.pumpAndSettle();
+    expect(container.read(learningSettingsProvider).subtitleLetterCase, '全部小写');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('settings screen shows prototype sections', (
     WidgetTester tester,
   ) async {

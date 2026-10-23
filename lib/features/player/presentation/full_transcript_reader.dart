@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../settings/presentation/settings_provider.dart';
 import '../../shared/data/word_lookup_service.dart';
 import '../../shared/data/word_pronunciation_service.dart';
+import '../../shared/domain/subtitle_letter_case.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../../shared/presentation/word_lookup_popup.dart';
 import '../../words/data/offline_word_dictionary.dart';
@@ -18,6 +19,7 @@ class TranscriptReaderProgress {
     required this.lineIndex,
     required this.wordIndex,
     this.loopingLineIndex,
+    this.subtitleLetterCase,
   });
 
   factory TranscriptReaderProgress.fromJson(Map<dynamic, dynamic> json) {
@@ -25,23 +27,27 @@ class TranscriptReaderProgress {
       lineIndex: json['lineIndex'] as int? ?? 0,
       wordIndex: json['wordIndex'] as int? ?? 0,
       loopingLineIndex: json['loopingLineIndex'] as int?,
+      subtitleLetterCase: json['subtitleLetterCase'] as String?,
     );
   }
 
   final int lineIndex;
   final int wordIndex;
   final int? loopingLineIndex;
+  final String? subtitleLetterCase;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'lineIndex': lineIndex,
     'wordIndex': wordIndex,
     'loopingLineIndex': loopingLineIndex,
+    'subtitleLetterCase': subtitleLetterCase,
   };
 }
 
 class TranscriptReaderSnapshot {
   const TranscriptReaderSnapshot({
     required this.courseTitle,
+    this.subtitleLetterCase = '保留原样',
     required this.episodeTitle,
     required this.lines,
     required this.meanings,
@@ -51,6 +57,7 @@ class TranscriptReaderSnapshot {
   factory TranscriptReaderSnapshot.fromJson(Map<dynamic, dynamic> json) {
     return TranscriptReaderSnapshot(
       courseTitle: json['courseTitle'] as String? ?? '',
+      subtitleLetterCase: json['subtitleLetterCase'] as String? ?? '保留原样',
       episodeTitle: json['episodeTitle'] as String? ?? '',
       lines: (json['lines'] as List<dynamic>? ?? const <dynamic>[])
           .whereType<Map<dynamic, dynamic>>()
@@ -71,6 +78,7 @@ class TranscriptReaderSnapshot {
   }
 
   final String courseTitle;
+  final String subtitleLetterCase;
   final String episodeTitle;
   final List<PlayerSubtitleLine> lines;
   final Map<String, String> meanings;
@@ -78,6 +86,7 @@ class TranscriptReaderSnapshot {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'courseTitle': courseTitle,
+    'subtitleLetterCase': subtitleLetterCase,
     'episodeTitle': episodeTitle,
     'lines': lines.map(_lineToJson).toList(growable: false),
     'meanings': meanings,
@@ -86,6 +95,7 @@ class TranscriptReaderSnapshot {
 }
 
 Future<TranscriptReaderSnapshot> buildTranscriptReaderSnapshot({
+  String subtitleLetterCase = '保留原样',
   required String courseTitle,
   required String episodeTitle,
   required List<PlayerSubtitleLine> lines,
@@ -121,6 +131,7 @@ Future<TranscriptReaderSnapshot> buildTranscriptReaderSnapshot({
   }
 
   return TranscriptReaderSnapshot(
+    subtitleLetterCase: subtitleLetterCase,
     courseTitle: courseTitle,
     episodeTitle: episodeTitle,
     lines: lines,
@@ -129,6 +140,7 @@ Future<TranscriptReaderSnapshot> buildTranscriptReaderSnapshot({
       lineIndex: activeLineIndex,
       wordIndex: currentWordIndex,
       loopingLineIndex: loopingLineIndex,
+      subtitleLetterCase: subtitleLetterCase,
     ),
   );
 }
@@ -236,13 +248,16 @@ class _FullTranscriptReaderScreenState
 
   void _handleProgressChanged() {
     final TranscriptReaderProgress next = widget.progressListenable.value;
-    if (next.lineIndex == _progress.lineIndex &&
-        next.wordIndex == _progress.wordIndex &&
-        next.loopingLineIndex == _progress.loopingLineIndex) {
+    final bool positionChanged =
+        next.lineIndex != _progress.lineIndex ||
+        next.wordIndex != _progress.wordIndex ||
+        next.loopingLineIndex != _progress.loopingLineIndex;
+    if (!positionChanged &&
+        next.subtitleLetterCase == _progress.subtitleLetterCase) {
       return;
     }
     setState(() => _progress = next);
-    if (!_hasTextSelection) {
+    if (positionChanged && !_hasTextSelection) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _revealActiveWord());
     }
   }
@@ -444,6 +459,7 @@ class _FullTranscriptReaderScreenState
           lineIndex: lineIndex,
           wordIndex: wordIndex,
           loopingLineIndex: _progress.loopingLineIndex,
+          subtitleLetterCase: _progress.subtitleLetterCase,
         ),
       );
       if (!_hasTextSelection) {
@@ -607,6 +623,9 @@ class _FullTranscriptReaderScreenState
                           children: <Widget>[
                             _ReaderLine(
                               line: widget.snapshot.lines[lineIndex],
+                              subtitleLetterCase:
+                                  _progress.subtitleLetterCase ??
+                                  widget.snapshot.subtitleLetterCase,
                               meanings: widget.snapshot.meanings,
                               lineIndex: lineIndex,
                               activeLineIndex: _progress.lineIndex,
@@ -792,6 +811,7 @@ class _ReaderHeader extends StatelessWidget {
 
 class _ReaderLine extends StatelessWidget {
   const _ReaderLine({
+    required this.subtitleLetterCase,
     required this.line,
     required this.meanings,
     required this.lineIndex,
@@ -805,6 +825,7 @@ class _ReaderLine extends StatelessWidget {
   });
 
   final PlayerSubtitleLine line;
+  final String subtitleLetterCase;
   final Map<String, String> meanings;
   final int lineIndex;
   final int activeLineIndex;
@@ -818,7 +839,11 @@ class _ReaderLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<String> tokens = transcriptReaderTokens(line);
+    final List<String> tokens =
+        formatSubtitleLetterCase(line.english, subtitleLetterCase)
+            .split(RegExp(r'\s+'))
+            .where((String token) => token.isNotEmpty)
+            .toList(growable: false);
     final bool isActive = lineIndex == activeLineIndex;
     return AnimatedContainer(
       key: ValueKey<String>('reader-line-$lineIndex-$isActive'),

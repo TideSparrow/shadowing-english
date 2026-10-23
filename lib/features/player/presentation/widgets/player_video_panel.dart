@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 
+import '../../../shared/domain/subtitle_letter_case.dart';
 import '../../../shared/presentation/pad/app_design_tokens.dart';
 import '../../../shared/presentation/word_lookup_popup.dart';
 import '../player_mock_state.dart';
@@ -16,6 +17,7 @@ class PlayerVideoPanel extends StatefulWidget {
     required this.line,
     required this.isPlaying,
     required this.subtitleMode,
+    this.subtitleLetterCase = '保留原样',
     required this.subtitleModes,
     this.embeddedSubtitleTracks = const <SubtitleTrack>[],
     this.selectedEmbeddedSubtitleId,
@@ -40,6 +42,7 @@ class PlayerVideoPanel extends StatefulWidget {
     required this.onSeek,
     required this.onSpeedSelected,
     required this.onSelectSubtitleMode,
+    this.onSelectSubtitleLetterCase,
     this.onSelectEmbeddedSubtitle,
     required this.onToggleShadowing,
     required this.onToggleLoop,
@@ -74,6 +77,7 @@ class PlayerVideoPanel extends StatefulWidget {
   final PlayerSubtitleLine line;
   final bool isPlaying;
   final String subtitleMode;
+  final String subtitleLetterCase;
   final List<String> subtitleModes;
   final List<SubtitleTrack> embeddedSubtitleTracks;
   final String? selectedEmbeddedSubtitleId;
@@ -98,6 +102,7 @@ class PlayerVideoPanel extends StatefulWidget {
   final ValueChanged<double> onSeek;
   final ValueChanged<String> onSpeedSelected;
   final ValueChanged<String> onSelectSubtitleMode;
+  final ValueChanged<String>? onSelectSubtitleLetterCase;
   final ValueChanged<SubtitleTrack?>? onSelectEmbeddedSubtitle;
   final VoidCallback onToggleShadowing;
   final VoidCallback onToggleLoop;
@@ -663,7 +668,12 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
                           _buildEnglishSubtitle(
-                            showChinese ? widget.line.english : overlayText,
+                            widget.subtitleMode == '单中'
+                                ? overlayText
+                                : formatSubtitleLetterCase(
+                                    widget.line.english,
+                                    widget.subtitleLetterCase,
+                                  ),
                             tinyControls: tinyControls,
                           ),
                           if (showChinese) ...<Widget>[
@@ -902,6 +912,38 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                                       fullscreen: widget.isFullscreen,
                                     ),
                                   ),
+                                  if (widget.onSelectSubtitleLetterCase != null)
+                                    PopupMenuButton<String>(
+                                      tooltip: '英文字幕大小写',
+                                      onSelected: (String value) {
+                                        widget.onSelectSubtitleLetterCase!(
+                                          value,
+                                        );
+                                        _scheduleAutoHide();
+                                      },
+                                      itemBuilder: (BuildContext context) =>
+                                          subtitleLetterCaseOptions
+                                              .map(
+                                                (
+                                                  String mode,
+                                                ) => CheckedPopupMenuItem<String>(
+                                                  value: mode,
+                                                  checked:
+                                                      mode ==
+                                                      widget.subtitleLetterCase,
+                                                  child: Text(mode),
+                                                ),
+                                              )
+                                              .toList(growable: false),
+                                      child: _MiniPillAction(
+                                        icon: Icons.text_fields_rounded,
+                                        iconText: 'Aa',
+                                        label: compactControls ? null : '大小写',
+                                        compact: compactControls,
+                                        tiny: tinyControls,
+                                        fullscreen: widget.isFullscreen,
+                                      ),
+                                    ),
                                   PopupMenuButton<String>(
                                     tooltip: '播放速度',
                                     onSelected: (String value) {

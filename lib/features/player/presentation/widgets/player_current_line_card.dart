@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/domain/subtitle_letter_case.dart';
 import '../../../shared/presentation/pad/app_design_tokens.dart';
 import '../../../shared/presentation/word_lookup_popup.dart';
 import '../player_mock_state.dart';
@@ -8,6 +9,7 @@ class PlayerCurrentLineCard extends StatefulWidget {
   const PlayerCurrentLineCard({
     required this.line,
     required this.subtitleMode,
+    this.subtitleLetterCase = '保留原样',
     required this.currentWordIndex,
     required this.fontScale,
     required this.highlightWords,
@@ -19,6 +21,7 @@ class PlayerCurrentLineCard extends StatefulWidget {
 
   final PlayerSubtitleLine line;
   final String subtitleMode;
+  final String subtitleLetterCase;
   final int currentWordIndex;
   final double fontScale;
   final bool highlightWords;
@@ -37,15 +40,23 @@ class _PlayerCurrentLineCardState extends State<PlayerCurrentLineCard> {
   @override
   void initState() {
     super.initState();
-    _tokens = _buildTokens(widget.line.english);
+    _tokens = _buildTokens(
+      formatSubtitleLetterCase(widget.line.english, widget.subtitleLetterCase),
+    );
   }
 
   @override
   void didUpdateWidget(covariant PlayerCurrentLineCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.line.english != widget.line.english) {
+    if (oldWidget.line.english != widget.line.english ||
+        oldWidget.subtitleLetterCase != widget.subtitleLetterCase) {
       selectedWord = null;
-      _tokens = _buildTokens(widget.line.english);
+      _tokens = _buildTokens(
+        formatSubtitleLetterCase(
+          widget.line.english,
+          widget.subtitleLetterCase,
+        ),
+      );
     }
   }
 

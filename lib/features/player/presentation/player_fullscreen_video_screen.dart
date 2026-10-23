@@ -13,6 +13,7 @@ import 'widgets/player_video_panel.dart';
 class PlayerFullscreenVideoScreen extends StatefulWidget {
   const PlayerFullscreenVideoScreen({
     required this.playerState,
+    this.subtitleLetterCase = '保留原样',
     required this.highlightWords,
     this.subtitleWordHighlightStyle = '绿色填充',
     this.subtitleWordHighlightBorderWidth = 2.5,
@@ -28,6 +29,7 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
     required this.onSeek,
     required this.onSpeedSelected,
     required this.onSelectSubtitleMode,
+    this.onSelectSubtitleLetterCase,
     this.embeddedSubtitleTracks = const <SubtitleTrack>[],
     this.selectedEmbeddedSubtitleId,
     this.onSelectEmbeddedSubtitle,
@@ -57,6 +59,7 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
   });
 
   final PlayerMockState playerState;
+  final String subtitleLetterCase;
   final bool highlightWords;
   final String subtitleWordHighlightStyle;
   final double subtitleWordHighlightBorderWidth;
@@ -72,6 +75,7 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
   final ValueChanged<double> onSeek;
   final ValueChanged<String> onSpeedSelected;
   final ValueChanged<String> onSelectSubtitleMode;
+  final ValueChanged<String>? onSelectSubtitleLetterCase;
   final List<SubtitleTrack> embeddedSubtitleTracks;
   final String? selectedEmbeddedSubtitleId;
   final ValueChanged<SubtitleTrack?>? onSelectEmbeddedSubtitle;
@@ -112,6 +116,7 @@ class _PlayerFullscreenVideoScreenState
   bool _showSubtitlePanel = false;
   bool _showControls = true;
   Timer? _refreshTimer;
+  late String _subtitleLetterCase = widget.subtitleLetterCase;
   late bool _isMuted = widget.isMuted;
   late double _volumeLevel = widget.volumeLevel;
 
@@ -126,6 +131,14 @@ class _PlayerFullscreenVideoScreenState
         setState(() {});
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant PlayerFullscreenVideoScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.subtitleLetterCase != widget.subtitleLetterCase) {
+      _subtitleLetterCase = widget.subtitleLetterCase;
+    }
   }
 
   @override
@@ -179,6 +192,7 @@ class _PlayerFullscreenVideoScreenState
               selectedEmbeddedSubtitleId: widget.selectedEmbeddedSubtitleId,
               currentWordIndex: player.currentWordIndex,
               highlightWords: widget.highlightWords,
+              subtitleLetterCase: _subtitleLetterCase,
               subtitleWordHighlightStyle: widget.subtitleWordHighlightStyle,
               subtitleWordHighlightBorderWidth:
                   widget.subtitleWordHighlightBorderWidth,
@@ -199,6 +213,13 @@ class _PlayerFullscreenVideoScreenState
               onSeek: (double value) => _refresh(() => widget.onSeek(value)),
               onSpeedSelected: (String value) =>
                   _refresh(() => widget.onSpeedSelected(value)),
+              onSelectSubtitleLetterCase:
+                  widget.onSelectSubtitleLetterCase == null
+                  ? null
+                  : (String value) {
+                      widget.onSelectSubtitleLetterCase!(value);
+                      setState(() => _subtitleLetterCase = value);
+                    },
               onSelectSubtitleMode: (String value) =>
                   _refresh(() => widget.onSelectSubtitleMode(value)),
               onSelectEmbeddedSubtitle: (SubtitleTrack? track) =>
@@ -312,6 +333,7 @@ class _PlayerFullscreenVideoScreenState
                 player: player,
                 fontScale: widget.fontScale,
                 highlightWords: widget.highlightWords,
+                subtitleLetterCase: _subtitleLetterCase,
                 subtitleWordHighlightStyle: widget.subtitleWordHighlightStyle,
                 subtitleWordHighlightBorderWidth:
                     widget.subtitleWordHighlightBorderWidth,
@@ -340,6 +362,7 @@ const double _subtitlePanelWidth = 390;
 class _FullscreenSubtitlePanel extends StatelessWidget {
   const _FullscreenSubtitlePanel({
     required this.player,
+    required this.subtitleLetterCase,
     required this.fontScale,
     required this.highlightWords,
     required this.subtitleWordHighlightStyle,
@@ -357,6 +380,7 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
   });
 
   final PlayerMockState player;
+  final String subtitleLetterCase;
   final double fontScale;
   final bool highlightWords;
   final String subtitleWordHighlightStyle;
@@ -387,6 +411,7 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
           lines: player.lines,
           activeIndex: player.activeLineIndex,
           subtitleMode: player.subtitleMode,
+          subtitleLetterCase: subtitleLetterCase,
           currentWordIndex: player.currentWordIndex,
           fontScale: fontScale,
           highlightWords: highlightWords,

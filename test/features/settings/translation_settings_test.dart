@@ -25,6 +25,58 @@ void main() {
     hiveDir.deleteSync(recursive: true);
   });
 
+  test(
+    'subtitle letter case persists, rejects invalid values, and resets',
+    () async {
+      final ProviderContainer container = ProviderContainer();
+      addTearDown(container.dispose);
+      final LearningSettingsNotifier settings = container.read(
+        learningSettingsProvider.notifier,
+      );
+      expect(
+        container.read(learningSettingsProvider).subtitleLetterCase,
+        '保留原样',
+      );
+      settings
+        ..setSubtitleLetterCase('全部小写')
+        ..setSubtitleLetterCase('invalid');
+      await Hive.box<String>('prefs').flush();
+      final ProviderContainer restored = ProviderContainer();
+      addTearDown(restored.dispose);
+      expect(
+        restored.read(learningSettingsProvider).subtitleLetterCase,
+        '全部小写',
+      );
+      restored.read(learningSettingsProvider.notifier).resetToDefaults();
+      expect(
+        restored.read(learningSettingsProvider).subtitleLetterCase,
+        '保留原样',
+      );
+    },
+  );
+
+  test(
+    'old or invalid subtitle letter case settings keep the original text',
+    () async {
+      for (final Object? value in <Object?>[null, 'invalid', 42]) {
+        await Hive.box<String>('prefs').put(
+          'learning_settings_v1',
+          jsonEncode(<String, Object?>{
+            if (value != null) 'subtitleLetterCase': value,
+            'fontSize': '大',
+          }),
+        );
+        final ProviderContainer container = ProviderContainer();
+        expect(
+          container.read(learningSettingsProvider).subtitleLetterCase,
+          '保留原样',
+        );
+        expect(container.read(learningSettingsProvider).fontSize, '大');
+        container.dispose();
+      }
+    },
+  );
+
   test('defaults to OpenAI translation source', () {
     final ProviderContainer container = ProviderContainer();
     addTearDown(container.dispose);

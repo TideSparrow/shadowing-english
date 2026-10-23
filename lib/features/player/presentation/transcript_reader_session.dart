@@ -109,15 +109,19 @@ class TranscriptReaderSession {
     required int lineIndex,
     required int wordIndex,
     int? loopingLineIndex,
+    String? subtitleLetterCase,
   }) {
     final TranscriptReaderProgress next = TranscriptReaderProgress(
       lineIndex: lineIndex,
       wordIndex: wordIndex,
       loopingLineIndex: loopingLineIndex,
+      subtitleLetterCase:
+          subtitleLetterCase ?? progress.value.subtitleLetterCase,
     );
     if (progress.value.lineIndex == next.lineIndex &&
         progress.value.wordIndex == next.wordIndex &&
-        progress.value.loopingLineIndex == next.loopingLineIndex) {
+        progress.value.loopingLineIndex == next.loopingLineIndex &&
+        progress.value.subtitleLetterCase == next.subtitleLetterCase) {
       return;
     }
     progress.value = next;
@@ -248,7 +252,8 @@ bool _sameProgress(
 ) =>
     left?.lineIndex == right.lineIndex &&
     left?.wordIndex == right.wordIndex &&
-    left?.loopingLineIndex == right.loopingLineIndex;
+    left?.loopingLineIndex == right.loopingLineIndex &&
+    left?.subtitleLetterCase == right.subtitleLetterCase;
 
 bool _isTranscriptReaderArguments(String arguments) {
   try {

@@ -9,6 +9,7 @@ class PlayerTranscriptPanel extends StatefulWidget {
     required this.lines,
     required this.activeIndex,
     required this.subtitleMode,
+    this.subtitleLetterCase = '保留原样',
     required this.currentWordIndex,
     required this.fontScale,
     required this.highlightWords,
@@ -34,6 +35,7 @@ class PlayerTranscriptPanel extends StatefulWidget {
   final List<PlayerSubtitleLine> lines;
   final int activeIndex;
   final String subtitleMode;
+  final String subtitleLetterCase;
   final int currentWordIndex;
   final double fontScale;
   final bool highlightWords;
@@ -80,6 +82,7 @@ class _PlayerTranscriptPanelState extends State<PlayerTranscriptPanel> {
             lines: widget.lines,
             activeIndex: widget.activeIndex,
             subtitleMode: widget.subtitleMode,
+            subtitleLetterCase: widget.subtitleLetterCase,
             showCurrentOnly: _showCurrentOnly,
             currentWordIndex: widget.currentWordIndex,
             fontScale: widget.fontScale,

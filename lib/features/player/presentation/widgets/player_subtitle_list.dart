@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:flutter/services.dart';
 
+import '../../../shared/domain/subtitle_letter_case.dart';
 import '../../../shared/presentation/pad/app_design_tokens.dart';
 import '../../../shared/presentation/word_lookup_popup.dart';
 import '../player_mock_state.dart';
@@ -14,6 +15,7 @@ class PlayerSubtitleList extends StatefulWidget {
     required this.lines,
     required this.activeIndex,
     required this.subtitleMode,
+    this.subtitleLetterCase = '保留原样',
     this.showCurrentOnly = false,
     required this.currentWordIndex,
     required this.fontScale,
@@ -47,6 +49,7 @@ class PlayerSubtitleList extends StatefulWidget {
   final List<PlayerSubtitleLine> lines;
   final int activeIndex;
   final String subtitleMode;
+  final String subtitleLetterCase;
   final bool showCurrentOnly;
   final int currentWordIndex;
   final double fontScale;
@@ -562,7 +565,10 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                           )
                         else
                           _buildWordLine(
-                            line.english,
+                            formatSubtitleLetterCase(
+                              line.english,
+                              widget.subtitleLetterCase,
+                            ),
                             active && line.words.isNotEmpty
                                 ? widget.currentWordIndex
                                 : null,

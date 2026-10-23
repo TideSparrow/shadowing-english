@@ -105,6 +105,12 @@ class PadLandscapePlayerScreenState
     super.initState();
     state = PlayerMockState(initialStartTime: widget.initialStartTime);
     _syncSettingsToState(ref.read(learningSettingsProvider));
+    ref.listenManual<String>(
+      learningSettingsProvider.select(
+        (LearningSettingsState settings) => settings.subtitleLetterCase,
+      ),
+      (String? previous, String next) => _syncTranscriptReader(),
+    );
     PlayerSystemMediaControls.bind(
       onPlay: _handleSystemPlay,
       onPause: _handleSystemPause,
@@ -585,6 +591,7 @@ class PadLandscapePlayerScreenState
   void _syncTranscriptReader() {
     if (!state.hasLines) return;
     _transcriptReaderSession.updateProgress(
+      subtitleLetterCase: ref.read(learningSettingsProvider).subtitleLetterCase,
       lineIndex: state.activeLineIndex,
       wordIndex: state.currentWordIndex,
       loopingLineIndex: state.isLooping ? state.activeLineIndex : null,
@@ -605,6 +612,9 @@ class PadLandscapePlayerScreenState
   }) async {
     final TranscriptReaderSnapshot snapshot =
         await buildTranscriptReaderSnapshot(
+          subtitleLetterCase: ref
+              .read(learningSettingsProvider)
+              .subtitleLetterCase,
           courseTitle: courseTitle,
           episodeTitle: episodeTitle,
           lines: state.lines,
@@ -747,6 +757,7 @@ class PadLandscapePlayerScreenState
                                   _selectedEmbeddedSubtitleId,
                               currentWordIndex: state.currentWordIndex,
                               highlightWords: settings.highlightWords,
+                              subtitleLetterCase: settings.subtitleLetterCase,
                               subtitleWordHighlightStyle:
                                   settings.subtitleWordHighlightStyle,
                               subtitleWordHighlightBorderWidth:
@@ -767,6 +778,9 @@ class PadLandscapePlayerScreenState
                               onSeek: _handleSeek,
                               onSpeedSelected: _handleSpeedSelected,
                               onSelectSubtitleMode: _handleSetSubtitleMode,
+                              onSelectSubtitleLetterCase: ref
+                                  .read(learningSettingsProvider.notifier)
+                                  .setSubtitleLetterCase,
                               onSelectEmbeddedSubtitle:
                                   _handleSelectEmbeddedSubtitle,
                               onToggleShadowing: _handleToggleShadowing,
@@ -835,6 +849,8 @@ class PadLandscapePlayerScreenState
                                       currentWordIndex: state.currentWordIndex,
                                       fontScale: settings.fontScale,
                                       highlightWords: settings.highlightWords,
+                                      subtitleLetterCase:
+                                          settings.subtitleLetterCase,
                                       subtitleWordHighlightStyle:
                                           settings.subtitleWordHighlightStyle,
                                       subtitleWordHighlightBorderWidth: settings
@@ -880,6 +896,8 @@ class PadLandscapePlayerScreenState
                                       currentWordIndex: 0,
                                       fontScale: settings.fontScale,
                                       highlightWords: settings.highlightWords,
+                                      subtitleLetterCase:
+                                          settings.subtitleLetterCase,
                                       onTapLine: (_) {},
                                       onCollectWord: (_) {},
                                       onBookmarkLine: (_) {},
@@ -1482,6 +1500,9 @@ class PadLandscapePlayerScreenState
           builder: (BuildContext context) => PlayerFullscreenVideoScreen(
             playerState: state,
             highlightWords: highlightWords,
+            subtitleLetterCase: ref
+                .read(learningSettingsProvider)
+                .subtitleLetterCase,
             subtitleWordHighlightStyle: subtitleWordHighlightStyle,
             subtitleWordHighlightBorderWidth: subtitleWordHighlightBorderWidth,
             isMuted: _isMuted,
@@ -1496,6 +1517,9 @@ class PadLandscapePlayerScreenState
             onSeek: _handleSeek,
             onSpeedSelected: _handleSpeedSelected,
             onSelectSubtitleMode: _handleSetSubtitleMode,
+            onSelectSubtitleLetterCase: ref
+                .read(learningSettingsProvider.notifier)
+                .setSubtitleLetterCase,
             embeddedSubtitleTracks: _embeddedSubtitleTracks,
             selectedEmbeddedSubtitleId: _selectedEmbeddedSubtitleId,
             onSelectEmbeddedSubtitle: _handleSelectEmbeddedSubtitle,

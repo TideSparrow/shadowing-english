@@ -88,6 +88,18 @@ class SettingsScreen extends ConsumerWidget {
                 },
               ),
               _SelectRow(
+                title: '英文字幕大小写',
+                description: '切换已有和新字幕的显示格式；首字母大写按句首处理。',
+                value: settings.subtitleLetterCase,
+                options: subtitleLetterCaseOptions,
+                onChanged: (String? value) {
+                  if (value == null) return;
+                  ref
+                      .read(learningSettingsProvider.notifier)
+                      .setSubtitleLetterCase(value);
+                },
+              ),
+              _SelectRow(
                 title: '默认速度',
                 description: '设置新视频的默认播放速度。',
                 value: settings.playbackSpeed,
