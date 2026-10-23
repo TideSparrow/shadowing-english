@@ -618,9 +618,8 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
       state = state.copyWith(
         isFetchingAsrModels: false,
         availableAsrModels: models,
-        asrModel: models.contains(state.asrModel) || models.isEmpty
-            ? state.asrModel
-            : models.first,
+        // /models can include chat models; fetching must not replace the
+        // configured transcription model with an unrelated first result.
       );
       return models;
     } catch (_) {

@@ -11,6 +11,252 @@ import 'package:common_learn_english/features/settings/presentation/settings_pro
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('batch Chinese subtitles', () {
+    late Directory root;
+    late File video;
+    late List<String> source;
+    final LearningSettingsState settings = _settings().copyWith(
+      generateBilingualAsrSubtitles: true,
+    );
+    setUp(() {
+      root = Directory.systemTemp.createTempSync('asr-job-batch-');
+      video = File('${root.path}/lesson.mp4')..writeAsStringSync('video');
+      source = List<String>.generate(418, (int i) => 'Sentence number $i.');
+    });
+    tearDown(() => root.deleteSync(recursive: true));
+
+    AsrSubtitleJobRunner runner({
+      AsrBatchTranslator? batch,
+      AsrSentenceTranslator? sentence,
+    }) => AsrSubtitleJobRunner(
+      supportDirectory: () async => root,
+      cache: AsrSubtitleCache(appSupportDirectory: () async => root),
+      service: AsrSubtitleService(
+        prepareAudioChunksOverride: (_) async => <AsrAudioChunk>[
+          for (int i = 0; i < source.length; i += 28)
+            AsrAudioChunk(
+              file: File('${root.path}/chunk$i.m4a')
+                ..writeAsStringSync('audio'),
+              offsetMs: i * 2000,
+            ),
+        ],
+      ),
+      cloudTranscribeChunk:
+          ({
+            required AsrAudioChunk chunk,
+            required LearningSettingsState settings,
+          }) async => <String, Object?>{
+            'version': 1,
+            'language': 'en',
+            'lines': <Map<String, Object?>>[
+              for (
+                int i = chunk.offsetMs ~/ 2000;
+                i < source.length && i < chunk.offsetMs ~/ 2000 + 28;
+                i += 1
+              )
+                _chunkLine(source[i], i * 2000),
+            ],
+          },
+      translateSentences: batch,
+      translateSentence: sentence,
+    );
+
+    test(
+      '418 lines use 11 requests and preserve text and word timings',
+      () async {
+        final List<int> sizes = <int>[];
+        final List<AsrSubtitleProgress> progress = <AsrSubtitleProgress>[];
+        final String raw =
+            await runner(
+              batch:
+                  ({
+                    required List<String> sentences,
+                    required LearningSettingsState settings,
+                  }) async {
+                    sizes.add(sentences.length);
+                    return sentences.map((String text) => '翻译：$text').toList();
+                  },
+            ).run(
+              episodeId: 'batch-episode',
+              videoPath: video.path,
+              settings: settings,
+              onProgress: progress.add,
+            );
+        final List<PlayerSubtitleLine> lines = parseSubtitleLines(raw);
+        expect(sizes, <int>[...List<int>.filled(10, 40), 18]);
+        expect(lines.map((PlayerSubtitleLine line) => line.english), source);
+        for (int i = 0; i < source.length; i += 1) {
+          expect(lines[i].chinese, '翻译：${source[i]}');
+          expect(lines[i].startMs, i * 2000);
+          expect(lines[i].words.first.startMs, i * 2000);
+          expect(lines[i].words.last.endMs, i * 2000 + 1000);
+        }
+        expect(
+          progress
+              .where(
+                (AsrSubtitleProgress p) =>
+                    p.phase == AsrSubtitlePhase.translating,
+              )
+              .map((AsrSubtitleProgress p) => p.completedTranslations),
+          <int>[0, for (int i = 40; i <= 400; i += 40) i, 418],
+        );
+        expect(subtitleGenerationWarning(raw), isNull);
+      },
+    );
+
+    test(
+      'failed batch keeps completed lines and resumes only missing batches',
+      () async {
+        source = source.take(82).toList();
+        int calls = 0;
+        final List<List<String>> resumed = <List<String>>[];
+        bool fail = true;
+        final AsrSubtitleJobRunner job = runner(
+          batch:
+              ({
+                required List<String> sentences,
+                required LearningSettingsState settings,
+              }) async {
+                calls += 1;
+                if (fail && calls == 2) throw StateError('network unavailable');
+                if (!fail) resumed.add(sentences);
+                return sentences.map((String text) => '翻译：$text').toList();
+              },
+        );
+        final String partial = await job.run(
+          episodeId: 'batch-episode',
+          videoPath: video.path,
+          settings: settings,
+        );
+        expect(subtitleGenerationWarning(partial), isNotNull);
+        expect(
+          parseSubtitleLines(
+            partial,
+          ).where((PlayerSubtitleLine line) => line.chinese.isNotEmpty).length,
+          40,
+        );
+        fail = false;
+        final String complete = await job.run(
+          episodeId: 'batch-episode',
+          videoPath: video.path,
+          settings: settings,
+        );
+        expect(resumed.map((List<String> batch) => batch.length), <int>[40, 2]);
+        expect(resumed.expand((List<String> batch) => batch), source.skip(40));
+        expect(
+          parseSubtitleLines(
+            complete,
+          ).every((PlayerSubtitleLine line) => line.chinese.isNotEmpty),
+          isTrue,
+        );
+        expect(subtitleGenerationWarning(complete), isNull);
+      },
+    );
+
+    test('old sentence checkpoints are reused by batch translation', () async {
+      source = source.take(3).toList();
+      final AsrSubtitleJobRunner old = runner(
+        sentence:
+            ({
+              required String sentence,
+              required LearningSettingsState settings,
+            }) async => sentence == source.first ? '原有翻译' : null,
+      );
+      await old.run(
+        episodeId: 'batch-episode',
+        videoPath: video.path,
+        settings: settings,
+      );
+      final String raw =
+          await runner(
+            batch:
+                ({
+                  required List<String> sentences,
+                  required LearningSettingsState settings,
+                }) async {
+                  expect(sentences, source.skip(1));
+                  return <String>['第二句', '第三句'];
+                },
+          ).run(
+            episodeId: 'batch-episode',
+            videoPath: video.path,
+            settings: settings,
+          );
+      expect(
+        parseSubtitleLines(raw).map((PlayerSubtitleLine line) => line.chinese),
+        <String>['原有翻译', '第二句', '第三句'],
+      );
+    });
+
+    test('long subtitles also bound each batch by character count', () async {
+      source = List<String>.generate(9, (int i) => '$i ${'word ' * 200}');
+      final List<int> sizes = <int>[];
+      await runner(
+        batch:
+            ({
+              required List<String> sentences,
+              required LearningSettingsState settings,
+            }) async {
+              sizes.add(sentences.length);
+              expect(
+                sentences.fold<int>(
+                  0,
+                  (int sum, String text) => sum + text.length,
+                ),
+                lessThanOrEqualTo(6000),
+              );
+              return sentences.map((String text) => '翻译：$text').toList();
+            },
+      ).run(
+        episodeId: 'batch-episode',
+        videoPath: video.path,
+        settings: settings,
+      );
+      expect(sizes, <int>[5, 4]);
+    });
+
+    test('cancellation saves the completed batch before stopping', () async {
+      source = source.take(42).toList();
+      final AsrSubtitleCancellationToken token = AsrSubtitleCancellationToken();
+      final AsrSubtitleJobRunner job = runner(
+        batch:
+            ({
+              required List<String> sentences,
+              required LearningSettingsState settings,
+            }) async {
+              token.cancel();
+              return sentences.map((String text) => '翻译：$text').toList();
+            },
+      );
+      await expectLater(
+        job.run(
+          episodeId: 'batch-episode',
+          videoPath: video.path,
+          settings: settings,
+          cancellationToken: token,
+        ),
+        throwsA(isA<AsrSubtitleGenerationException>()),
+      );
+      int calls = 0;
+      await runner(
+        batch:
+            ({
+              required List<String> sentences,
+              required LearningSettingsState settings,
+            }) async {
+              calls += 1;
+              expect(sentences, source.skip(40));
+              return <String>['余下第一句', '余下第二句'];
+            },
+      ).run(
+        episodeId: 'batch-episode',
+        videoPath: video.path,
+        settings: settings,
+      );
+      expect(calls, 1);
+    });
+  });
+
   test(
     'reference subtitles keep authoritative text while ASR supplies word timings',
     () async {

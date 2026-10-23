@@ -536,8 +536,8 @@ class SettingsScreen extends ConsumerWidget {
                       if (!isTencentAsr && !isAlibabaAsr)
                         _ModelFetchRow(
                           title: '获取 ASR 模型',
-                          emptyDescription: '从当前 ASR provider 拉取可用模型列表。',
-                          loadedDescription: '已拿到 ASR 模型列表，可直接在下方选择。',
+                          emptyDescription: '获取接口的模型列表，当前模型不会自动更改。',
+                          loadedDescription: '列表可能包含聊天模型，请选择支持词级时间戳的语音识别模型。',
                           isLoading: settings.isFetchingAsrModels,
                           hasModels: settings.availableAsrModels.isNotEmpty,
                           onTap: () async {
@@ -556,7 +556,7 @@ class SettingsScreen extends ConsumerWidget {
                                 context,
                                 models.isEmpty
                                     ? '未获取到可用 ASR 模型。'
-                                    : '已获取 ${models.length} 个 ASR 模型。',
+                                    : '已获取 ${models.length} 个模型，请选择语音识别模型。',
                               );
                             } catch (_) {
                               if (!context.mounted) {
@@ -569,14 +569,12 @@ class SettingsScreen extends ConsumerWidget {
                       if (settings.availableAsrModels.isNotEmpty)
                         _SelectRow(
                           title: 'ASR 模型选择',
-                          description: '从当前 provider 返回的模型列表中直接选择。',
-                          value:
-                              settings.availableAsrModels.contains(
-                                settings.asrModel,
-                              )
-                              ? settings.asrModel
-                              : settings.availableAsrModels.first,
-                          options: settings.availableAsrModels,
+                          description: '请选择支持词级时间戳的语音识别模型，不能使用聊天模型。',
+                          value: settings.asrModel,
+                          options: <String>{
+                            settings.asrModel,
+                            ...settings.availableAsrModels,
+                          }.toList(growable: false),
                           onChanged: (String? value) {
                             if (value == null) {
                               return;
@@ -592,7 +590,7 @@ class SettingsScreen extends ConsumerWidget {
                             ? '腾讯英文识别使用 16k_en。'
                             : isAlibabaAsr
                             ? '默认使用 qwen3-asr-flash-filetrans，提供词级时间戳。'
-                            : '可手动输入模型名；已获取模型后也可以直接覆盖。',
+                            : '默认 whisper-1；中转需支持语音转写和词级时间戳。',
                         value: settings.asrModel,
                         hintText: isTencentAsr
                             ? '16k_en'

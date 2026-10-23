@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:common_learn_english/features/settings/presentation/settings_provider.dart';
 import 'package:common_learn_english/features/shared/data/word_lookup_service.dart';
 import 'package:common_learn_english/features/shared/domain/word_lookup_entry.dart';
@@ -5,6 +7,129 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('batch subtitle translation', () {
+    final LearningSettingsState settings = LearningSettingsState.defaults()
+        .copyWith(translationApiKey: 'test-key');
+
+    test('one request preserves IDs and restores reordered results', () async {
+      int requests = 0;
+      final WordLookupService service = WordLookupService(
+        httpRequestOverride:
+            ({
+              required BaseOptions options,
+              required String method,
+              required String path,
+              Map<String, dynamic>? queryParameters,
+              Object? data,
+            }) async {
+              requests += 1;
+              expect(method, 'POST');
+              expect(path, '/chat/completions');
+              expect(options.receiveTimeout, const Duration(seconds: 90));
+              final Map<String, dynamic> body = data! as Map<String, dynamic>;
+              expect(body.containsKey('response_format'), isFalse);
+              final List<Map<String, String>> messages =
+                  body['messages'] as List<Map<String, String>>;
+              expect(
+                jsonDecode(messages.last['content']!),
+                <Map<String, Object>>[
+                  <String, Object>{'id': 0, 'text': 'Hello.'},
+                  <String, Object>{'id': 1, 'text': 'Goodbye.'},
+                ],
+              );
+              return _translationResponse(path, <Map<String, Object>>[
+                <String, Object>{'id': 1, 'text': '再见。'},
+                <String, Object>{'id': 0, 'text': ' 你好。 '},
+              ], fenced: true);
+            },
+      );
+      expect(
+        await service.translateSentences(
+          sentences: <String>['Hello.', 'Goodbye.'],
+          settings: settings,
+        ),
+        <String>['你好。', '再见。'],
+      );
+      expect(requests, 1);
+      expect(
+        await service.translateSentences(
+          sentences: <String>[],
+          settings: settings,
+        ),
+        isEmpty,
+      );
+      expect(requests, 1);
+    });
+
+    final Map<String, List<Map<String, Object>>> invalid =
+        <String, List<Map<String, Object>>>{
+          'missing ID': <Map<String, Object>>[
+            <String, Object>{'id': 0, 'text': '你好'},
+          ],
+          'duplicate ID': <Map<String, Object>>[
+            <String, Object>{'id': 0, 'text': '你好'},
+            <String, Object>{'id': 0, 'text': '再见'},
+          ],
+          'unknown ID': <Map<String, Object>>[
+            <String, Object>{'id': 0, 'text': '你好'},
+            <String, Object>{'id': 2, 'text': '再见'},
+          ],
+          'empty text': <Map<String, Object>>[
+            <String, Object>{'id': 0, 'text': '你好'},
+            <String, Object>{'id': 1, 'text': ' '},
+          ],
+        };
+    for (final MapEntry<String, List<Map<String, Object>>> entry
+        in invalid.entries) {
+      test(
+        'rejects ${entry.key} without assigning subtitles by position',
+        () async {
+          final WordLookupService service = WordLookupService(
+            httpRequestOverride:
+                ({
+                  required BaseOptions options,
+                  required String method,
+                  required String path,
+                  Map<String, dynamic>? queryParameters,
+                  Object? data,
+                }) async => _translationResponse(path, entry.value),
+          );
+          await expectLater(
+            service.translateSentences(
+              sentences: <String>['Hello.', 'Goodbye.'],
+              settings: settings,
+            ),
+            throwsFormatException,
+          );
+        },
+      );
+    }
+    test(
+      'rejects truncated output even if JSON happens to be complete',
+      () async {
+        final WordLookupService service = WordLookupService(
+          httpRequestOverride:
+              ({
+                required BaseOptions options,
+                required String method,
+                required String path,
+                Map<String, dynamic>? queryParameters,
+                Object? data,
+              }) async => _translationResponse(path, <Map<String, Object>>[
+                <String, Object>{'id': 0, 'text': '你好'},
+              ], finishReason: 'length'),
+        );
+        await expectLater(
+          service.translateSentences(
+            sentences: <String>['Hello.'],
+            settings: settings,
+          ),
+          throwsFormatException,
+        );
+      },
+    );
+  });
+
   test('preserves the full lookup result when sent between windows', () {
     const WordLookupEntry entry = WordLookupEntry(
       word: 'Guess',
@@ -307,4 +432,28 @@ void main() {
     expect(entry.contextMeaningCn, isNull);
     expect(entry.definitionEn, isEmpty);
   });
+}
+
+Response<dynamic> _translationResponse(
+  String path,
+  List<Map<String, Object>> translations, {
+  bool fenced = false,
+  String finishReason = 'stop',
+}) {
+  final String content = jsonEncode(<String, Object>{
+    'translations': translations,
+  });
+  return Response<dynamic>(
+    requestOptions: RequestOptions(path: path),
+    data: <String, Object>{
+      'choices': <Map<String, Object>>[
+        <String, Object>{
+          'finish_reason': finishReason,
+          'message': <String, String>{
+            'content': fenced ? '```json\n$content\n```' : content,
+          },
+        },
+      ],
+    },
+  );
 }

@@ -24,6 +24,12 @@ typedef AsrSentenceTranslator =
       required LearningSettingsState settings,
     });
 
+typedef AsrBatchTranslator =
+    Future<List<String>> Function({
+      required List<String> sentences,
+      required LearningSettingsState settings,
+    });
+
 class AsrSubtitleGenerationException implements Exception {
   const AsrSubtitleGenerationException(this.message);
 
@@ -196,6 +202,7 @@ class AsrSubtitleJobRunner {
     this.service = const AsrSubtitleService(),
     this.cloudTranscribeChunk,
     this.translateSentence,
+    this.translateSentences,
   });
 
   final Future<Directory> Function()? supportDirectory;
@@ -203,6 +210,10 @@ class AsrSubtitleJobRunner {
   final AsrSubtitleService service;
   final AsrChunkTranscriber? cloudTranscribeChunk;
   final AsrSentenceTranslator? translateSentence;
+  final AsrBatchTranslator? translateSentences;
+
+  static const int _translationBatchLines = 40;
+  static const int _translationBatchCharacters = 6000;
 
   static const int _repairableOverlapMs = 500;
   static final Set<String> _activeJobs = <String>{};
@@ -713,63 +724,97 @@ class AsrSubtitleJobRunner {
         )
         .length;
     onProgress?.call(completed, englishLines.length, null);
-    for (final dynamic line in lines) {
-      if (line is! Map<String, dynamic>) {
-        continue;
-      }
-      if ((line['chinese'] as String? ?? '').trim().isNotEmpty) {
-        continue;
-      }
-      final String english = (line['english'] as String? ?? '').trim();
-      if (english.isEmpty) {
-        continue;
-      }
+    final List<Map<String, dynamic>> pending = <Map<String, dynamic>>[];
+    for (final Map<String, dynamic> line in englishLines) {
       cancellationToken?.throwIfCancelled();
-      final String key = _translationLineKey(line, english);
-      final String? cached = translations[key];
-      String? chinese = cached;
-      if (chinese == null) {
-        try {
-          chinese =
-              await (translateSentence ??
-                      const WordLookupService().translateSentence)(
-                    sentence: english,
-                    settings: settings,
-                  )
-                  .timeout(
-                    const Duration(seconds: 45),
-                    onTimeout: () =>
-                        throw TimeoutException('双语字幕翻译超时，请检查网络后重试；已完成的翻译会保留。'),
-                  );
-        } catch (_) {
-          cancellationToken?.throwIfCancelled();
-          decoded['translationWarning'] =
-              '英文词级字幕已生成，但中文翻译未全部完成；请检查翻译设置或网络后重新生成。';
+      if ((line['chinese'] as String? ?? '').trim().isNotEmpty) continue;
+      final String english = (line['english'] as String).trim();
+      final String? cached = translations[_translationLineKey(line, english)];
+      if (cached != null && cached.trim().isNotEmpty) {
+        line['chinese'] = cached;
+        completed += 1;
+        onProgress?.call(completed, englishLines.length, english);
+      } else {
+        pending.add(line);
+      }
+    }
+
+    final bool useBatch =
+        translateSentences != null ||
+        (translateSentence == null &&
+            _isAiTranslationProvider(settings.translationProvider));
+    int offset = 0;
+    while (offset < pending.length) {
+      cancellationToken?.throwIfCancelled();
+      int end = offset;
+      int characters = 0;
+      final int limit = useBatch ? _translationBatchLines : 1;
+      while (end < pending.length && end - offset < limit) {
+        final int length = (pending[end]['english'] as String).length;
+        if (end > offset && characters + length > _translationBatchCharacters) {
           break;
         }
+        characters += length;
+        end += 1;
       }
-      if (chinese == null || chinese.trim().isEmpty) {
+      final List<Map<String, dynamic>> batch = pending.sublist(offset, end);
+      final List<String> sentences = batch
+          .map(
+            (Map<String, dynamic> line) => (line['english'] as String).trim(),
+          )
+          .toList(growable: false);
+      List<String> chinese;
+      try {
+        if (useBatch) {
+          chinese =
+              await (translateSentences ??
+                      const WordLookupService().translateSentences)(
+                    sentences: sentences,
+                    settings: settings,
+                  )
+                  .timeout(const Duration(seconds: 90));
+        } else {
+          final String? sentence =
+              await (translateSentence ??
+                      const WordLookupService().translateSentence)(
+                    sentence: sentences.single,
+                    settings: settings,
+                  )
+                  .timeout(const Duration(seconds: 45));
+          chinese = <String>[sentence ?? ''];
+        }
+        if (chinese.length != batch.length ||
+            chinese.any((String text) => text.trim().isEmpty)) {
+          throw const FormatException('Incomplete subtitle translations.');
+        }
+      } catch (_) {
+        cancellationToken?.throwIfCancelled();
         decoded['translationWarning'] = '英文词级字幕已生成，但中文翻译未全部完成；请检查翻译设置或网络后重新生成。';
         break;
       }
-      line['chinese'] = chinese.trim();
-      if (cached == null) {
-        translations[key] = chinese.trim();
-        await _writeJsonAtomically(checkpoint, <String, Object?>{
-          'version': 1,
-          'signature': signature,
-          'translations': translations,
-        });
+      for (int i = 0; i < batch.length; i += 1) {
+        batch[i]['chinese'] = chinese[i].trim();
+        translations[_translationLineKey(batch[i], sentences[i])] = chinese[i]
+            .trim();
       }
+      // Keep the existing per-line keys so old checkpoints remain resumable.
+      await _writeJsonAtomically(checkpoint, <String, Object?>{
+        'version': 1,
+        'signature': signature,
+        'translations': translations,
+      });
+      completed += batch.length;
+      onProgress?.call(completed, englishLines.length, sentences.last);
       cancellationToken?.throwIfCancelled();
-      completed += 1;
-      onProgress?.call(completed, englishLines.length, english);
+      offset = end;
     }
     return const JsonEncoder.withIndent('  ').convert(decoded);
   }
 
   String? _bilingualConfigurationError(LearningSettingsState settings) {
-    if (!settings.generateBilingualAsrSubtitles || translateSentence != null) {
+    if (!settings.generateBilingualAsrSubtitles ||
+        translateSentence != null ||
+        translateSentences != null) {
       return null;
     }
     if (settings.translationApiKey.trim().isEmpty) {

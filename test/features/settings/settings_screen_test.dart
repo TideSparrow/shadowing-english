@@ -171,6 +171,52 @@ void main() {
     expect(find.text('deepseek-v4-flash'), findsWidgets);
   });
 
+  testWidgets('ASR dropdown shows the actual model when relay omits it', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          learningSettingsProvider.overrideWith(
+            () => _TestLearningSettingsNotifier(
+              LearningSettingsState.defaults().copyWith(
+                asrProvider: 'OpenAI',
+                useCustomAsrEndpoint: true,
+                asrModel: 'whisper-1',
+                availableAsrModels: const <String>['openai/gpt-5.6-terra'],
+              ),
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: SettingsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (
+      int i = 0;
+      i < 12 && find.text('ASR 模型选择').evaluate().isEmpty;
+      i += 1
+    ) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
+    }
+    final Finder dropdown = find.byWidgetPredicate(
+      (Widget widget) =>
+          widget is DropdownButton<String> &&
+          (widget.items?.any(
+                (DropdownMenuItem<String> item) =>
+                    item.value == 'openai/gpt-5.6-terra',
+              ) ??
+              false),
+    );
+    expect(dropdown, findsOneWidget);
+    expect(tester.widget<DropdownButton<String>>(dropdown).value, 'whisper-1');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('settings links to AI subtitle management', (
     WidgetTester tester,
   ) async {
