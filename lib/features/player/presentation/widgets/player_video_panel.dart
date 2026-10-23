@@ -51,7 +51,9 @@ class PlayerVideoPanel extends StatefulWidget {
     required this.onToggleFullscreen,
     this.onSubtitleLookupOpen,
     this.onCollectWord,
+    this.onCollectWordAtTime,
     this.onFavoriteWord,
+    this.episodeId,
     this.onPronounce,
     this.onToggleEpisodePanel,
     this.isEpisodePanelOpen = false,
@@ -111,7 +113,9 @@ class PlayerVideoPanel extends StatefulWidget {
   final VoidCallback onToggleFullscreen;
   final VoidCallback? onSubtitleLookupOpen;
   final ValueChanged<String>? onCollectWord;
+  final void Function(String word, String time)? onCollectWordAtTime;
   final ValueChanged<String>? onFavoriteWord;
+  final String? episodeId;
   final VoidCallback? onPronounce;
   final VoidCallback? onToggleEpisodePanel;
   final bool isEpisodePanelOpen;
@@ -261,10 +265,13 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
       builder: (BuildContext overlayContext) {
         final EdgeInsets padding = MediaQuery.paddingOf(overlayContext);
         final Size overlaySize = MediaQuery.sizeOf(overlayContext);
-        const double popupWidth = 392;
         const double popupMaxHeight = 520;
         const double gap = 10;
         const double inset = 16;
+        final double popupWidth = (overlaySize.width - inset * 2).clamp(
+          0.0,
+          WordLookupPopupCard.preferredWidth,
+        );
         final double popupHeight = (overlaySize.height - padding.top - 80)
             .clamp(180.0, popupMaxHeight);
         final double left =
@@ -293,14 +300,21 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                 color: Colors.transparent,
                 child: WordLookupPopupCard(
                   rawWord: word,
+                  episodeId: widget.episodeId,
+                  contextTime: widget.line.startTime,
                   contextSentence: widget.line.english,
                   showAbove: showAbove,
                   maxHeight: popupHeight,
                   onPronounce: widget.onPronounce,
                   onClose: _closeSubtitleLookup,
                   onCollect: () {
-                    _closeSubtitleLookup();
-                    widget.onCollectWord?.call(word);
+                    final void Function(String, String)? collect =
+                        widget.onCollectWordAtTime;
+                    if (collect != null) {
+                      collect(word, widget.line.startTime);
+                    } else {
+                      widget.onCollectWord?.call(word);
+                    }
                   },
                   onFavorite: widget.onFavoriteWord == null
                       ? null

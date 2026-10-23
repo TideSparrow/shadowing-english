@@ -17,6 +17,7 @@ class PlayerTranscriptPanel extends StatefulWidget {
     this.subtitleWordHighlightBorderWidth = 2.5,
     required this.onTapLine,
     required this.onCollectWord,
+    this.onCollectWordAtTime,
     this.onFavoriteWord,
     required this.onBookmarkLine,
     required this.onLoopFromLine,
@@ -25,6 +26,7 @@ class PlayerTranscriptPanel extends StatefulWidget {
     this.loopingLineIndex,
     required this.isPlaying,
     required this.onTogglePlaying,
+    this.episodeId,
     this.onPronounce,
     this.onRegenerateAiSubtitles,
     this.onDeleteAiSubtitles,
@@ -43,6 +45,7 @@ class PlayerTranscriptPanel extends StatefulWidget {
   final double subtitleWordHighlightBorderWidth;
   final ValueChanged<int> onTapLine;
   final ValueChanged<String> onCollectWord;
+  final void Function(String word, String time)? onCollectWordAtTime;
   final ValueChanged<String>? onFavoriteWord;
   final ValueChanged<int> onBookmarkLine;
   final ValueChanged<int> onLoopFromLine;
@@ -51,6 +54,7 @@ class PlayerTranscriptPanel extends StatefulWidget {
   final int? loopingLineIndex;
   final bool isPlaying;
   final VoidCallback onTogglePlaying;
+  final String? episodeId;
   final VoidCallback? onPronounce;
   final VoidCallback? onRegenerateAiSubtitles;
   final VoidCallback? onDeleteAiSubtitles;
@@ -80,6 +84,7 @@ class _PlayerTranscriptPanelState extends State<PlayerTranscriptPanel> {
         Expanded(
           child: PlayerSubtitleList(
             lines: widget.lines,
+            episodeId: widget.episodeId,
             activeIndex: widget.activeIndex,
             subtitleMode: widget.subtitleMode,
             subtitleLetterCase: widget.subtitleLetterCase,
@@ -91,6 +96,7 @@ class _PlayerTranscriptPanelState extends State<PlayerTranscriptPanel> {
             subtitleWordHighlightBorderWidth:
                 widget.subtitleWordHighlightBorderWidth,
             onCollectWord: widget.onCollectWord,
+            onCollectWordAtTime: widget.onCollectWordAtTime,
             onFavoriteWord: widget.onFavoriteWord,
             onTapLine: widget.onTapLine,
             onBookmarkLine: widget.onBookmarkLine,

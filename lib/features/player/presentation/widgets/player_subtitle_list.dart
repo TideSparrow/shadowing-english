@@ -24,6 +24,7 @@ class PlayerSubtitleList extends StatefulWidget {
     this.subtitleWordHighlightBorderWidth = 2.5,
     required this.onTapLine,
     required this.onCollectWord,
+    this.onCollectWordAtTime,
     this.onFavoriteWord,
     required this.onBookmarkLine,
     required this.onLoopFromLine,
@@ -32,6 +33,7 @@ class PlayerSubtitleList extends StatefulWidget {
     this.loopingLineIndex,
     this.isPlaying = false,
     this.onTogglePlaying,
+    this.episodeId,
     this.onPronounce,
     this.showAiGenerateSubtitles = false,
     this.generatingAiSubtitles = false,
@@ -58,6 +60,7 @@ class PlayerSubtitleList extends StatefulWidget {
   final double subtitleWordHighlightBorderWidth;
   final ValueChanged<int> onTapLine;
   final ValueChanged<String> onCollectWord;
+  final void Function(String word, String time)? onCollectWordAtTime;
   final ValueChanged<String>? onFavoriteWord;
   final ValueChanged<int> onBookmarkLine;
   final ValueChanged<int> onLoopFromLine;
@@ -66,6 +69,7 @@ class PlayerSubtitleList extends StatefulWidget {
   final int? loopingLineIndex;
   final bool isPlaying;
   final VoidCallback? onTogglePlaying;
+  final String? episodeId;
   final VoidCallback? onPronounce;
   final bool showAiGenerateSubtitles;
   final bool generatingAiSubtitles;
@@ -218,6 +222,7 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
     String rawWord,
     String contextSentence,
     String tokenId,
+    String contextTime,
   ) {
     if (_activeDictionaryTokenId == tokenId) {
       _removeDictionaryOverlay();
@@ -236,9 +241,12 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
     );
     final Size anchorSize = anchorBox.size;
     final Size overlaySize = overlayBox.size;
-    const double popupWidth = 336;
     const double preferredPopupHeight = 520;
     const double viewportPadding = 16;
+    final double popupWidth = (overlaySize.width - viewportPadding * 2).clamp(
+      0.0,
+      WordLookupPopupCard.preferredWidth,
+    );
     const double popupGap = 8;
     final double popupHeight = (overlaySize.height - (viewportPadding * 2))
         .clamp(120.0, preferredPopupHeight);
@@ -310,6 +318,8 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                 color: Colors.transparent,
                 child: WordLookupPopupCard(
                   rawWord: rawWord,
+                  episodeId: widget.episodeId,
+                  contextTime: contextTime,
                   contextSentence: contextSentence,
                   showAbove: showAbove,
                   showSide: showSide,
@@ -318,8 +328,13 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                   onPronounce: widget.onPronounce,
                   onClose: _dismissDictionary,
                   onCollect: () {
-                    _dismissDictionary();
-                    widget.onCollectWord(rawWord);
+                    final void Function(String, String)? collect =
+                        widget.onCollectWordAtTime;
+                    if (collect != null) {
+                      collect(rawWord, contextTime);
+                    } else {
+                      widget.onCollectWord(rawWord);
+                    }
                   },
                   onFavorite: widget.onFavoriteWord == null
                       ? null
@@ -573,6 +588,7 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                                 ? widget.currentWordIndex
                                 : null,
                             active,
+                            line.startTime,
                           ),
                         if (widget.subtitleMode != '单英') ...<Widget>[
                           const _SelectableLineBreak(),
@@ -771,7 +787,12 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
     }
   }
 
-  Widget _buildWordLine(String text, int? highlightIndex, bool active) {
+  Widget _buildWordLine(
+    String text,
+    int? highlightIndex,
+    bool active,
+    String contextTime,
+  ) {
     final List<_WordToken> tokens = text
         .split(' ')
         .where((String rawWord) => rawWord.isNotEmpty)
@@ -802,6 +823,7 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                     token.value,
                     text,
                     tokenId,
+                    contextTime,
                   ),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(

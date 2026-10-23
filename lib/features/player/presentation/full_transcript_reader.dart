@@ -494,9 +494,12 @@ class _FullTranscriptReaderScreenState
     );
     final Size anchorSize = anchorBox.size;
     final Size overlaySize = overlayBox.size;
-    const double popupWidth = 336;
     const double preferredPopupHeight = 520;
     const double viewportPadding = 16;
+    final double popupWidth = (overlaySize.width - viewportPadding * 2).clamp(
+      0.0,
+      WordLookupPopupCard.preferredWidth,
+    );
     const double popupGap = 8;
     final double popupHeight = (overlaySize.height - (viewportPadding * 2))
         .clamp(120.0, preferredPopupHeight);

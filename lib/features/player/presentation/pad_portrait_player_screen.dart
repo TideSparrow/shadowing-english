@@ -748,6 +748,7 @@ class _PadPortraitPlayerScreenState
                         horizontal: playerHorizontalPadding,
                       ),
                       child: PlayerVideoPanel(
+                        episodeId: widget.episodeId,
                         line: activeLine,
                         isPlaying: state.isPlaying,
                         speed: state.speed,
@@ -789,6 +790,8 @@ class _PadPortraitPlayerScreenState
                         onSubtitleLookupOpen: _stopVideo,
                         onCollectWord: (String word) =>
                             _handleCollectWord(word, courseContext),
+                        onCollectWordAtTime: (String word, String time) =>
+                            _handleCollectWord(word, courseContext, time),
                         onFavoriteWord: _handleFavoriteWord,
                         onPronounce: _stopVideo,
                         onToggleFullscreen: () => _handleOpenFullscreen(
@@ -822,6 +825,7 @@ class _PadPortraitPlayerScreenState
                           ),
                           child: state.hasLines
                               ? PlayerTranscriptPanel(
+                                  episodeId: widget.episodeId,
                                   lines: state.lines,
                                   activeIndex: state.activeLineIndex,
                                   subtitleMode: state.subtitleMode,
@@ -837,6 +841,13 @@ class _PadPortraitPlayerScreenState
                                   onTapLine: _goToLine,
                                   onCollectWord: (String word) =>
                                       _handleCollectWord(word, courseContext),
+                                  onCollectWordAtTime:
+                                      (String word, String time) =>
+                                          _handleCollectWord(
+                                            word,
+                                            courseContext,
+                                            time,
+                                          ),
                                   onFavoriteWord: _handleFavoriteWord,
                                   onBookmarkLine: (int index) =>
                                       _handleBookmarkLine(index, courseContext),
@@ -863,6 +874,7 @@ class _PadPortraitPlayerScreenState
                                 )
                               : canGenerateAiSubtitles
                               ? PlayerSubtitleList(
+                                  episodeId: widget.episodeId,
                                   lines: const <PlayerSubtitleLine>[],
                                   activeIndex: 0,
                                   subtitleMode: '隐藏',
@@ -1267,8 +1279,17 @@ class _PadPortraitPlayerScreenState
     _showMessage(added ? '成功收藏当前句型到短语库！' : '该例句已经在您的短语库中！');
   }
 
-  void _handleCollectWord(String word, PlayerCourseLookupResult courseContext) {
-    final PlayerSubtitleLine line = state.lines[state.activeLineIndex];
+  void _handleCollectWord(
+    String word,
+    PlayerCourseLookupResult courseContext, [
+    String? contextTime,
+  ]) {
+    final PlayerSubtitleLine line = contextTime == null
+        ? state.activeLine
+        : state.lines.firstWhere(
+            (PlayerSubtitleLine item) => item.startTime == contextTime,
+            orElse: () => state.activeLine,
+          );
     final LibraryCourseData? course = courseContext.course;
     final LibraryEpisodeItem? episode = courseContext.episode;
     final bool added = ref
@@ -1298,7 +1319,7 @@ class _PadPortraitPlayerScreenState
           episodeId: widget.episodeId,
         );
     final LibraryEpisodeItem? episode = courseContext.episode;
-    ref
+    final bool added = ref
         .read(wordBookProvider.notifier)
         .addFavoriteWord(
           rawWord: word,
@@ -1312,7 +1333,7 @@ class _PadPortraitPlayerScreenState
           generatedDefinition:
               state.generatedWordDefinitions[normalizeWord(word)],
         );
-    _showMessage('已收藏单词 "$word"');
+    _showMessage(added ? '已收藏单词 "$word"' : '未能收藏，请选择独立英文单词。');
   }
 
   void _recordPlayDuration({required int durationMs}) {
@@ -1489,6 +1510,8 @@ class _PadPortraitPlayerScreenState
             onSubtitleLookupOpen: _stopVideo,
             onCollectWord: (String word) =>
                 _handleCollectWord(word, courseContext),
+            onCollectWordAtTime: (String word, String time) =>
+                _handleCollectWord(word, courseContext, time),
             onFavoriteWord: _handleFavoriteWord,
             onBookmarkLine: (int index) =>
                 _handleBookmarkLine(index, courseContext),

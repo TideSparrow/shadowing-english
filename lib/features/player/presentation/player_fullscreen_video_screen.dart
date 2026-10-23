@@ -39,6 +39,7 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
     required this.onVolumeChanged,
     required this.onSubtitleLookupOpen,
     required this.onCollectWord,
+    this.onCollectWordAtTime,
     this.onFavoriteWord,
     this.onBookmarkLine = _ignoreLine,
     this.onLoopFromLine = _ignoreLine,
@@ -85,6 +86,7 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
   final ValueChanged<double> onVolumeChanged;
   final VoidCallback onSubtitleLookupOpen;
   final ValueChanged<String> onCollectWord;
+  final void Function(String word, String time)? onCollectWordAtTime;
   final ValueChanged<String>? onFavoriteWord;
   final ValueChanged<int> onBookmarkLine;
   final ValueChanged<int> onLoopFromLine;
@@ -183,6 +185,7 @@ class _PlayerFullscreenVideoScreenState
             bottom: 0,
             right: rightInset,
             child: PlayerVideoPanel(
+              episodeId: widget.activeEpisodeId,
               line: line,
               isPlaying: player.isPlaying,
               speed: player.speed,
@@ -240,6 +243,7 @@ class _PlayerFullscreenVideoScreenState
               },
               onSubtitleLookupOpen: () => _refresh(widget.onSubtitleLookupOpen),
               onCollectWord: widget.onCollectWord,
+              onCollectWordAtTime: widget.onCollectWordAtTime,
               onFavoriteWord: widget.onFavoriteWord,
               onPronounce: () => _refresh(widget.onSubtitleLookupOpen),
               onToggleEpisodePanel: widget.episodes.isEmpty
@@ -330,6 +334,7 @@ class _PlayerFullscreenVideoScreenState
               right: 12,
               bottom: 0,
               child: _FullscreenSubtitlePanel(
+                episodeId: widget.activeEpisodeId,
                 player: player,
                 fontScale: widget.fontScale,
                 highlightWords: widget.highlightWords,
@@ -340,6 +345,7 @@ class _PlayerFullscreenVideoScreenState
                 onTapLine: (int index) =>
                     _refresh(() => widget.onSelectLine(index)),
                 onCollectWord: widget.onCollectWord,
+                onCollectWordAtTime: widget.onCollectWordAtTime,
                 onFavoriteWord: widget.onFavoriteWord,
                 onBookmarkLine: widget.onBookmarkLine,
                 onLoopFromLine: (int index) =>
@@ -361,6 +367,7 @@ const double _subtitlePanelWidth = 390;
 
 class _FullscreenSubtitlePanel extends StatelessWidget {
   const _FullscreenSubtitlePanel({
+    required this.episodeId,
     required this.player,
     required this.subtitleLetterCase,
     required this.fontScale,
@@ -369,6 +376,7 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
     required this.subtitleWordHighlightBorderWidth,
     required this.onTapLine,
     required this.onCollectWord,
+    this.onCollectWordAtTime,
     this.onFavoriteWord,
     required this.onBookmarkLine,
     required this.onLoopFromLine,
@@ -379,6 +387,7 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
     required this.onPronounce,
   });
 
+  final String episodeId;
   final PlayerMockState player;
   final String subtitleLetterCase;
   final double fontScale;
@@ -387,6 +396,7 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
   final double subtitleWordHighlightBorderWidth;
   final ValueChanged<int> onTapLine;
   final ValueChanged<String> onCollectWord;
+  final void Function(String word, String time)? onCollectWordAtTime;
   final ValueChanged<String>? onFavoriteWord;
   final ValueChanged<int> onBookmarkLine;
   final ValueChanged<int> onLoopFromLine;
@@ -408,6 +418,7 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: PlayerTranscriptPanel(
+          episodeId: episodeId,
           lines: player.lines,
           activeIndex: player.activeLineIndex,
           subtitleMode: player.subtitleMode,
@@ -419,6 +430,7 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
           subtitleWordHighlightBorderWidth: subtitleWordHighlightBorderWidth,
           onTapLine: onTapLine,
           onCollectWord: onCollectWord,
+          onCollectWordAtTime: onCollectWordAtTime,
           onFavoriteWord: onFavoriteWord,
           onBookmarkLine: onBookmarkLine,
           onLoopFromLine: onLoopFromLine,

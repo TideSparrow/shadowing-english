@@ -623,8 +623,11 @@ List<String> tokenizeWords(String sentence) =>
         .where(_isIndependentEnglishWord)
         .toList(growable: false);
 
-String normalizeWord(String value) =>
-    value.trim().toLowerCase().replaceAll('’', "'");
+String normalizeWord(String value) => value
+    .trim()
+    .toLowerCase()
+    .replaceAll('’', "'")
+    .replaceAll(RegExp(r'^[^A-Za-z0-9_]+|[^A-Za-z0-9_]+$'), '');
 
 bool _isIndependentEnglishWord(String word) =>
     RegExp(r'^[a-z]{2,}$').hasMatch(word);

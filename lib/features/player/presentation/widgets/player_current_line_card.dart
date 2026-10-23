@@ -15,6 +15,8 @@ class PlayerCurrentLineCard extends StatefulWidget {
     required this.highlightWords,
     required this.onBookmark,
     required this.onCollectWord,
+    this.onCollectWordAtTime,
+    this.episodeId,
     this.onPronounce,
     super.key,
   });
@@ -27,6 +29,8 @@ class PlayerCurrentLineCard extends StatefulWidget {
   final bool highlightWords;
   final VoidCallback onBookmark;
   final ValueChanged<String> onCollectWord;
+  final void Function(String word, String time)? onCollectWordAtTime;
+  final String? episodeId;
   final VoidCallback? onPronounce;
 
   @override
@@ -208,8 +212,18 @@ class _PlayerCurrentLineCardState extends State<PlayerCurrentLineCard> {
               const SizedBox(height: 18),
               WordLookupPopupCard(
                 rawWord: selectedWord!,
+                episodeId: widget.episodeId,
+                contextTime: widget.line.startTime,
                 contextSentence: widget.line.english,
-                onCollect: () => widget.onCollectWord(selectedWord!),
+                onCollect: () {
+                  final void Function(String, String)? collect =
+                      widget.onCollectWordAtTime;
+                  if (collect != null) {
+                    collect(selectedWord!, widget.line.startTime);
+                  } else {
+                    widget.onCollectWord(selectedWord!);
+                  }
+                },
                 onPronounce: widget.onPronounce,
                 onClose: () {
                   setState(() {

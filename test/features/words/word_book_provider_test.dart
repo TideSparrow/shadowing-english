@@ -12,6 +12,13 @@ void main() {
     expect(normalizeWord('  IT’S  '), "it's");
   });
 
+  test('normalizes surrounding subtitle punctuation without merging words', () {
+    expect(normalizeWord(' “Sanctuary,” '), 'sanctuary');
+    expect(normalizeWord('Puddles.'), 'puddles');
+    expect(normalizeWord('hello-world'), 'hello-world');
+    expect(normalizeWord('...'), isEmpty);
+  });
+
   test('counts subtitle frequency once without replay inflation', () async {
     final ProviderContainer container = _wordBookContainer();
     addTearDown(container.dispose);
@@ -88,7 +95,7 @@ void main() {
     container
         .read(wordBookProvider.notifier)
         .addFavoriteWord(
-          rawWord: 'Puddles',
+          rawWord: 'Puddles.',
           episodeId: 'episode-1',
           course: '课程',
           episode: '第 1 集',
@@ -102,6 +109,11 @@ void main() {
     expect(entry.word, 'puddles');
     expect(entry.favorite, isTrue);
     expect(entry.occurrences.single.contexts.single.chinese, '泥泞的水坑。');
+    expect(
+      container.read(wordBookProvider.notifier).toggleFavorite('“Puddles,”'),
+      isFalse,
+    );
+    expect(container.read(wordBookProvider).single.favorite, isFalse);
   });
 
   test('edits and deletes a word entry', () {

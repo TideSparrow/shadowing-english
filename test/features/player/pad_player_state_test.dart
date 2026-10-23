@@ -1604,8 +1604,8 @@ void main() {
     await tester.tap(find.text('sanctuary'));
     await tester.pumpAndSettle();
 
-    expect(find.text('加入短语库'), findsOneWidget);
-    expect(find.text('播放发音'), findsOneWidget);
+    expect(find.byTooltip('加入短语库'), findsOneWidget);
+    expect(find.byTooltip('播放发音'), findsOneWidget);
   });
 
   testWidgets('subtitle popup stays on screen and scrolls when content is tall', (
@@ -1876,9 +1876,9 @@ void main() {
 
     await tester.tap(find.text('sanctuary'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('播放发音'));
+    await tester.ensureVisible(find.byTooltip('播放发音'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('播放发音'));
+    await tester.tap(find.byTooltip('播放发音'));
     await tester.pumpAndSettle();
 
     expect(pausedForPronunciation, isTrue);
@@ -1917,7 +1917,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('播放发音'));
+    await tester.tap(find.byTooltip('播放发音'));
     await tester.pump();
 
     expect(find.text('朗读失败，请检查设备 TTS。'), findsOneWidget);

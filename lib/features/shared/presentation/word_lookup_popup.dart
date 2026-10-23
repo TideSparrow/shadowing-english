@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../phrases/presentation/phrase_book_provider.dart';
 import '../../settings/presentation/settings_provider.dart';
+import '../../words/presentation/word_book_provider.dart';
 import '../data/word_lookup_service.dart';
 import '../data/word_pronunciation_service.dart';
 import '../domain/word_lookup_entry.dart';
@@ -15,6 +17,8 @@ class WordLookupPopupCard extends ConsumerStatefulWidget {
     this.onCollect,
     this.onFavorite,
     this.onPronounce,
+    this.episodeId,
+    this.contextTime,
     this.fallbackDefinitionCn,
     this.showAbove = false,
     this.showSide = false,
@@ -23,12 +27,16 @@ class WordLookupPopupCard extends ConsumerStatefulWidget {
     super.key,
   });
 
+  static const double preferredWidth = 392;
+
   final String rawWord;
   final String contextSentence;
   final VoidCallback onClose;
   final VoidCallback? onCollect;
   final VoidCallback? onFavorite;
   final VoidCallback? onPronounce;
+  final String? episodeId;
+  final String? contextTime;
   final String? fallbackDefinitionCn;
   final bool showAbove;
   final bool showSide;
@@ -150,6 +158,61 @@ class _WordLookupPopupCardState extends ConsumerState<WordLookupPopupCard> {
 
   @override
   Widget build(BuildContext context) {
+    final String word = normalizeWord(widget.rawWord);
+    final bool isFavorite =
+        widget.onFavorite != null &&
+        ref.watch(
+          wordBookProvider.select(
+            (List<WordEntry> entries) => entries.any(
+              (WordEntry entry) => entry.word == word && entry.favorite,
+            ),
+          ),
+        );
+    final String sentence = widget.contextSentence.trim().toLowerCase();
+    final PhraseEntry? collectedPhrase = widget.onCollect == null
+        ? null
+        : ref.watch(
+            phraseBookProvider.select(
+              (List<PhraseEntry> entries) => entries
+                  .where(
+                    (PhraseEntry entry) =>
+                        entry.english.trim().toLowerCase() == sentence &&
+                        (widget.episodeId == null ||
+                            entry.episodeId == widget.episodeId) &&
+                        (widget.contextTime == null ||
+                            entry.time == widget.contextTime),
+                  )
+                  .firstOrNull,
+            ),
+          );
+    final bool isCollected = collectedPhrase != null;
+    final Widget body;
+    if (_isLoading) {
+      body = const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    } else if (_errorMessage != null) {
+      body = Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(
+          _errorMessage!,
+          style: const TextStyle(
+            height: 1.45,
+            color: AppDesignTokens.textSecondary,
+          ),
+        ),
+      );
+    } else if (_entry != null) {
+      body = _WordLookupPopupBody(
+        entry: _entry!,
+        contextSentence: widget.contextSentence,
+        isPronouncing: _isPronouncing,
+        onPronounce: _handlePronounce,
+      );
+    } else {
+      body = const SizedBox.shrink();
+    }
     final Widget content = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,6 +222,8 @@ class _WordLookupPopupCardState extends ConsumerState<WordLookupPopupCard> {
             Expanded(
               child: Text(
                 _entry?.word ?? widget.rawWord,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
@@ -166,45 +231,99 @@ class _WordLookupPopupCardState extends ConsumerState<WordLookupPopupCard> {
                 ),
               ),
             ),
+            if (widget.onFavorite != null)
+              IconButton(
+                tooltip: isFavorite ? '取消收藏' : '收藏单词',
+                onPressed: () {
+                  if (isFavorite) {
+                    ref
+                        .read(wordBookProvider.notifier)
+                        .toggleFavorite(widget.rawWord);
+                    _showMessage('已取消收藏单词 "${widget.rawWord}"');
+                  } else {
+                    widget.onFavorite!();
+                  }
+                },
+                isSelected: isFavorite,
+                color: isFavorite
+                    ? AppDesignTokens.brandGreenDark
+                    : AppDesignTokens.textSecondary,
+                style: IconButton.styleFrom(
+                  backgroundColor: isFavorite ? const Color(0xFFEAF5E5) : null,
+                ),
+                visualDensity: VisualDensity.compact,
+                iconSize: 20,
+                icon: Icon(isFavorite ? Icons.bookmark : Icons.bookmark_border),
+              ),
+            if (widget.onCollect != null)
+              IconButton(
+                tooltip: isCollected ? '从短语库移除' : '加入短语库',
+                onPressed: () {
+                  if (collectedPhrase != null) {
+                    ref
+                        .read(phraseBookProvider.notifier)
+                        .deletePhrase(collectedPhrase.id);
+                    _showMessage('已从短语库移除');
+                  } else {
+                    widget.onCollect!();
+                  }
+                },
+                isSelected: isCollected,
+                color: isCollected
+                    ? AppDesignTokens.brandGreenDark
+                    : AppDesignTokens.textSecondary,
+                style: IconButton.styleFrom(
+                  backgroundColor: isCollected ? const Color(0xFFEAF5E5) : null,
+                ),
+                visualDensity: VisualDensity.compact,
+                iconSize: 20,
+                icon: Icon(
+                  isCollected
+                      ? Icons.library_add_check
+                      : Icons.library_add_outlined,
+                ),
+              ),
+            IconButton(
+              tooltip: _isPronouncing ? '播放中...' : '播放发音',
+              onPressed: _isLoading || _entry == null || _isPronouncing
+                  ? null
+                  : () => _handlePronounce(_entry!.word),
+              visualDensity: VisualDensity.compact,
+              iconSize: 20,
+              disabledColor: _isPronouncing
+                  ? AppDesignTokens.brandGreenDark
+                  : null,
+              style: IconButton.styleFrom(
+                backgroundColor: _isPronouncing
+                    ? const Color(0xFFEAF5E5)
+                    : null,
+              ),
+              icon: Icon(
+                _isPronouncing
+                    ? Icons.graphic_eq_rounded
+                    : Icons.volume_up_outlined,
+              ),
+            ),
             IconButton(
               onPressed: widget.onClose,
+              tooltip: '关闭',
               visualDensity: VisualDensity.compact,
+              iconSize: 20,
               icon: const Icon(Icons.close_rounded),
             ),
           ],
         ),
-        if (_isLoading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (_errorMessage != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              _errorMessage!,
-              style: const TextStyle(
-                height: 1.45,
-                color: AppDesignTokens.textSecondary,
-              ),
-            ),
-          )
-        else if (_entry != null)
-          _WordLookupPopupBody(
-            entry: _entry!,
-            contextSentence: widget.contextSentence,
-            isPronouncing: _isPronouncing,
-            onCollect: widget.onCollect,
-            onFavorite: widget.onFavorite,
-            onPronounce: _handlePronounce,
-          ),
+        if (widget.maxHeight == null)
+          body
+        else
+          Flexible(child: SingleChildScrollView(child: body)),
       ],
     );
 
     return Container(
       key: const ValueKey<String>('word-lookup-popup-card'),
       constraints: BoxConstraints(
-        maxWidth: 336,
+        maxWidth: WordLookupPopupCard.preferredWidth,
         maxHeight: widget.maxHeight ?? double.infinity,
       ),
       padding: const EdgeInsets.all(16),
@@ -220,9 +339,7 @@ class _WordLookupPopupCardState extends ConsumerState<WordLookupPopupCard> {
           ),
         ],
       ),
-      child: widget.maxHeight == null
-          ? content
-          : SingleChildScrollView(child: content),
+      child: content,
     );
   }
 
@@ -238,16 +355,12 @@ class _WordLookupPopupBody extends StatelessWidget {
     required this.entry,
     required this.contextSentence,
     required this.isPronouncing,
-    required this.onCollect,
-    this.onFavorite,
     required this.onPronounce,
   });
 
   final WordLookupEntry entry;
   final String contextSentence;
   final bool isPronouncing;
-  final VoidCallback? onCollect;
-  final VoidCallback? onFavorite;
   final Future<void> Function(String text, {String language, bool preferSource})
   onPronounce;
 
@@ -460,39 +573,6 @@ class _WordLookupPopupBody extends StatelessWidget {
             fontSize: 12,
             color: AppDesignTokens.textSecondary,
           ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: <Widget>[
-            if (onFavorite != null)
-              IconButton(
-                tooltip: '收藏单词',
-                onPressed: onFavorite,
-                icon: const Icon(Icons.bookmark_add_outlined),
-              ),
-            if (onCollect != null) ...<Widget>[
-              Expanded(
-                child: FilledButton(
-                  onPressed: onCollect,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppDesignTokens.brandGreen,
-                  ),
-                  child: const Text('加入短语库'),
-                ),
-              ),
-              const SizedBox(width: 10),
-            ],
-            Expanded(
-              child: OutlinedButton(
-                onPressed: isPronouncing
-                    ? null
-                    : () {
-                        onPronounce(entry.word);
-                      },
-                child: Text(isPronouncing ? '播放中...' : '播放发音'),
-              ),
-            ),
-          ],
         ),
       ],
     );
