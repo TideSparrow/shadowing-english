@@ -30,62 +30,62 @@ dependencies:
   flutter:
     sdk: flutter
 
-  path_provider: ^2.1.5
+  path_provider: ^2.1.6
   package_info_plus: ^9.0.1
-  shared_preferences: ^2.5.3
-  file_selector: ^1.0.3
+  shared_preferences: ^2.5.6
+  file_selector: ^1.1.0
   media_kit: ^1.2.6
   media_kit_video: ^2.0.1
-  media_kit_libs_android_video: any
-  media_kit_libs_ios_video: any
-  media_kit_libs_macos_video: any
-  media_kit_libs_windows_video: any
-  media_kit_libs_linux: any
+  media_kit_libs_android_video: 1.3.8
+  media_kit_libs_ios_video: 1.1.4
+  media_kit_libs_macos_video: 1.1.4
+  media_kit_libs_windows_video: 1.0.11
+  media_kit_libs_linux: 1.2.1
   screen_brightness: ^2.1.11
-  desktop_multi_window: ^0.3.0
+  desktop_multi_window: ^0.3.1
   window_manager: ^0.5.2
-  drift: ^2.34.2
-  sqlite3_flutter_libs: ^0.5.40
+  drift: ^2.35.2
+  sqlite3_flutter_libs: ^0.6.0+eol
   flutter_displaymode: ^0.7.0
-  easy_localization: ^3.0.7
-  ionicons: ^0.2.2
-  lucide_flutter: ^1.25.0
-  cupertino_icons: ^1.0.2
-  flutter_riverpod: ^3.3.2
-  riverpod: ^3.3.2
-  dio: ^5.9.0
+  easy_localization: ^3.0.8
+  ionicons: ^0.2.3
+  lucide_flutter: ^1.47.0
+  cupertino_icons: ^2.0.0
+  flutter_riverpod: ^3.4.3
+  riverpod: ^3.4.3
+  dio: ^5.11.1
   freezed_annotation: ^3.1.0
-  riverpod_annotation: ^4.0.3
-  logger: ^2.5.0
+  riverpod_annotation: ^4.0.7
+  logger: ^2.8.0
   get_storage: ^2.1.1
   gap: ^3.0.1
   network_logger: ^1.0.4
   json_annotation: ^4.12.0
-  go_router: ^17.0.1
-  fpdart: ^1.1.0
-  responsive_builder: ^0.7.0
-  flex_color_scheme: ^8.0.2
-  url_launcher: ^6.1.11
-  open_filex: ^4.7.0
-  intl: ^0.20.2
-  stack_trace: ^1.11.0
-  google_fonts: ^8.2.0
-  fl_chart: ^1.2.0
-  android_id: ^0.5.1
-  hive_ce: ^2.11.1
+  go_router: ^18.1.1
+  fpdart: ^1.2.0
+  responsive_builder: ^0.7.1
+  flex_color_scheme: ^9.0.0
+  url_launcher: ^6.3.3
+  open_filex: ^5.0.0
+  intl: ^0.20.3
+  stack_trace: ^1.12.2
+  google_fonts: ^9.0.0
+  fl_chart: ^1.3.0
+  android_id: ^0.6.0
+  hive_ce: ^2.22.0
   device_info_plus: ^12.4.0
-  crypto: ^3.0.6
-  hive_ce_flutter: ^2.3.0
+  crypto: ^3.0.7
+  hive_ce_flutter: ^2.5.0
   dio_smart_retry: ^7.0.1
-  dio_cache_interceptor: ^4.0.5
+  dio_cache_interceptor: ^4.0.7
   flutter_tts:
     path: third_party/flutter_tts
   alphabet_list_view: ^1.2.1
   fsrs: 2.0.1
   archive: ^4.5.2
-  html: ^0.15.6
-  sqlite3: 3.5.2 # Keep aligned with assets/anki/sqlite3.wasm.
-  share_plus: 11.1.0
+  html: ^0.15.7
+  sqlite3: 3.7.1 # Keep aligned with assets/anki/sqlite3.wasm.
+  share_plus: 12.0.2
 
 
 dev_dependencies:
@@ -99,14 +99,14 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   # The "build_runner" package provides a way to generate files using Dart code
-  build_runner: ^2.10.4
-  json_serializable: ^6.14.0
-  riverpod_generator: ^4.0.4
-  riverpod_lint: ^3.1.4
-  freezed: ^3.2.6-dev.1
+  build_runner: ^2.16.2
+  json_serializable: ^6.15.2
+  riverpod_generator: ^4.0.9
+  riverpod_lint: ^3.1.9
+  freezed: ^4.0.3
   rider: ^0.0.1
-  hive_ce_generator: ^1.11.2
-  drift_dev: ^2.30.0
+  hive_ce_generator: ^1.12.0
+  drift_dev: ^2.35.1
   flutter_launcher_icons: ^0.14.4
 
 
