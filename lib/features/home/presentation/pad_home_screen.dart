@@ -36,16 +36,22 @@ class _PadHomeScreenState extends ConsumerState<PadHomeScreen> {
     final LibraryCourseData? currentCourse = courses
         .where((LibraryCourseData course) => course.episodes.isNotEmpty)
         .firstOrNull;
-    final String? firstEpisodeId = currentCourse?.episodes.first.id;
     final double width = MediaQuery.sizeOf(context).width;
     final bool compact = width < 900;
     final double pagePadding = compact ? 20 : 32;
 
-    void openCurrentEpisode() {
-      if (firstEpisodeId == null) {
+    void openCourse(LibraryCourseData? course) {
+      if (course == null) {
         openImportCourseExperience(context);
         return;
       }
+      if (course.episodes.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('该课程暂无可播放的剧集')));
+        return;
+      }
+      final String episodeId = course.episodes.first.id;
       if (_isOpeningEpisode) {
         return;
       }
@@ -59,7 +65,7 @@ class _PadHomeScreenState extends ConsumerState<PadHomeScreen> {
         context
             .pushNamed(
               SGRoute.player.name,
-              pathParameters: <String, String>{'episodeId': firstEpisodeId},
+              pathParameters: <String, String>{'episodeId': episodeId},
             )
             .then((_) {
               if (!mounted) {
@@ -85,7 +91,7 @@ class _PadHomeScreenState extends ConsumerState<PadHomeScreen> {
             _GreetingHeader(stats: stats, growth: growth),
             SizedBox(height: compact ? 24 : 28),
             PadHomeHero(
-              onTap: openCurrentEpisode,
+              onTap: () => openCourse(currentCourse),
               course: currentCourse,
               stats: stats,
             ),
@@ -107,7 +113,7 @@ class _PadHomeScreenState extends ConsumerState<PadHomeScreen> {
             SizedBox(height: compact ? 26 : 30),
             _SectionTitle(title: '最近学习的课程', compact: compact),
             SizedBox(height: compact ? 12 : 14),
-            _RecentCourses(courses: courses, onTap: openCurrentEpisode),
+            _RecentCourses(courses: courses, onTap: openCourse),
             SizedBox(height: compact ? 26 : 30),
             Text(
               '下一步想做什么？',
@@ -656,7 +662,7 @@ class _CollectionMetric extends StatelessWidget {
 class _RecentCourses extends StatelessWidget {
   const _RecentCourses({required this.courses, required this.onTap});
   final List<LibraryCourseData> courses;
-  final VoidCallback onTap;
+  final ValueChanged<LibraryCourseData> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -668,8 +674,12 @@ class _RecentCourses extends StatelessWidget {
         itemCount: courses.length,
         separatorBuilder: (_, _) => const SizedBox(width: 16),
         itemBuilder: (BuildContext context, int index) => SizedBox(
+          key: ValueKey<String>('recent-course-${courses[index].id}'),
           width: 260,
-          child: _RecentCourseCard(course: courses[index], onTap: onTap),
+          child: _RecentCourseCard(
+            course: courses[index],
+            onTap: () => onTap(courses[index]),
+          ),
         ),
       ),
     );
