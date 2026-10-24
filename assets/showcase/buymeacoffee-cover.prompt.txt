@@ -1,0 +1,10 @@
+Generated with the built-in imagegen tool.
+Brand reference: assets/img/app_icon.png
+Final image: buymeacoffee-cover.png
+Intended use: Buy Me a Coffee profile cover, cropped by the site to approximately 4:1.
+
+Initial prompt:
+Create a polished horizontal cover for the open-source app Shadowing English. Use the existing app icon as the mascot reference: a cheerful green leafy house with big friendly eyes, blue and yellow headphones, and an open-book doorway with a play symbol. Preserve the mascot identity, remove the square tile and checkerboard, and use a clean warm ivory backdrop with restrained pale sage sound-wave accents. Set the exact text "Shadowing English" and "Listen · Repeat · Speak" in dark forest green. No badges, CTA, fake screenshots, prices, or watermark. Keep essential content safely inside a central band for the site's banner crop.
+
+Final refinement prompt:
+Keep the same mascot identity, ivory background, sage sound-wave details, green palette, and exact words. Make the composition much more compact, with abundant blank space above and below. The site crops to 4:1 and overlaps the banner's bottom with cards. Make the entire mascot only 30% of the full image height, approximately y=28% to y=58%, fully visible including the book doorway and leaves. Set "Shadowing English" on ONE SINGLE LINE, about 9% of image height, to the mascot's right. Place "Listen · Repeat · Speak" beneath at about 4% of image height. Keep the entire mascot, title, and tagline within y=28% to y=58% and x=20% to x=80%. The top 25% and bottom 40% should be essentially empty. No tile, badges, watermark, UI, extra text, or prices. Landscape banner, as wide as possible, at least 1600 pixels wide.
