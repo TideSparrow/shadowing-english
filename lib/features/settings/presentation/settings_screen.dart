@@ -601,6 +601,19 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           SizedBox(height: compact ? 20 : 24),
+          SettingsGroupCard(
+            title: '支持项目',
+            icon: Icons.coffee_rounded,
+            children: <Widget>[
+              _ActionRow(
+                title: '请我喝杯咖啡',
+                description: '自愿赞助，支持开源维护与改进。将在浏览器打开 Buy Me a Coffee。',
+                icon: Icons.open_in_new_rounded,
+                onTap: () => _openSupportPage(context),
+              ),
+            ],
+          ),
+          SizedBox(height: compact ? 20 : 24),
           Center(
             child: Text(
               appVersion.when(
@@ -614,6 +627,19 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _openSupportPage(BuildContext context) async {
+    try {
+      final bool opened = await openUrl(
+        Uri.parse('https://buymeacoffee.com/marklongpcm'),
+      );
+      if (opened) return;
+    } catch (_) {
+      // Platform failures use the same actionable fallback as a rejected launch.
+    }
+    if (!context.mounted) return;
+    _showMessage(context, '无法打开浏览器，请访问 buymeacoffee.com/marklongpcm');
   }
 
   Future<void> _confirmReset(BuildContext context, WidgetRef ref) async {
