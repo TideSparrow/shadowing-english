@@ -17,6 +17,7 @@
 [![Release platforms](https://img.shields.io/badge/Release-Android%20%7C%20macOS%20%7C%20Linux%20%7C%20Windows-475569)](https://github.com/TideSparrow/shadowing-english/releases/latest)
 [![GitHub stars](https://img.shields.io/github/stars/TideSparrow/shadowing-english?style=flat)](https://github.com/TideSparrow/shadowing-english/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/TideSparrow/shadowing-english)](https://github.com/TideSparrow/shadowing-english/issues)
+[![请我喝杯咖啡](https://img.shields.io/badge/请我喝杯咖啡-FFDD00?logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/marklongpcm)
 
 [下载最新版](https://github.com/TideSparrow/shadowing-english/releases/latest) · [字幕功能说明](#字幕功能从导入到逐词跟读) · [从源码运行](#从源码运行) · [导入学习素材](#导入学习素材)
 
@@ -194,6 +195,12 @@ Friends-S01E01.zh.srt
 ## 参与贡献
 
 欢迎提交 [Issue](https://github.com/TideSparrow/shadowing-english/issues)，尤其是字幕匹配、播放器与跨平台问题。准备 Pull Request 前，建议先开 Issue 讨论；请不要提交未经授权的视频、字幕或课程资源。
+
+## 支持项目
+
+如果 Shadowing English 对你的英语学习有帮助，欢迎 [请我喝杯咖啡](https://buymeacoffee.com/marklongpcm)，支持项目维护、问题修复和功能改进。
+
+赞助完全自愿，不影响应用的使用或 MIT 开源许可。也欢迎通过 Star、Issue 和 Pull Request 支持项目。
 
 ## License
 

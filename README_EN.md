@@ -17,6 +17,7 @@ English · [中文](README.md)
 [![Release platforms](https://img.shields.io/badge/Release-Android%20%7C%20macOS%20%7C%20Linux%20%7C%20Windows-475569)](https://github.com/TideSparrow/shadowing-english/releases/latest)
 [![GitHub stars](https://img.shields.io/github/stars/TideSparrow/shadowing-english?style=flat)](https://github.com/TideSparrow/shadowing-english/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/TideSparrow/shadowing-english)](https://github.com/TideSparrow/shadowing-english/issues)
+[![Buy me a coffee](https://img.shields.io/badge/Buy_me_a_coffee-FFDD00?logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/marklongpcm)
 
 [Download the latest release](https://github.com/TideSparrow/shadowing-english/releases/latest) · [Subtitle guide](#subtitles-from-import-to-word-level-shadowing) · [Run from source](#run-from-source) · [Import learning materials](#import-learning-materials)
 
@@ -182,6 +183,12 @@ Read [RESOURCE_SETUP.md](RESOURCE_SETUP.md) for more detail. This repository doe
 ## Contributing
 
 [Issues](https://github.com/TideSparrow/shadowing-english/issues) are welcome, especially for subtitle matching, playback, and cross-platform problems. Please open an Issue before a substantial pull request, and do not submit unauthorized video, subtitle, or course resources.
+
+## Support the project
+
+If Shadowing English helps you practice English, you can [buy me a coffee](https://buymeacoffee.com/marklongpcm) to support maintenance, bug fixes, and improvements.
+
+Support is entirely optional and does not affect access to the app or its MIT license. Stars, issues, and pull requests are also appreciated.
 
 ## License
 
