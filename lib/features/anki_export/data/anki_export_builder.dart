@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../phrases/presentation/phrase_book_provider.dart';
+import '../../shared/domain/subtitle_letter_case.dart';
 import '../../words/data/offline_word_dictionary.dart';
 import '../../words/presentation/word_book_provider.dart';
 import '../domain/anki_export_note.dart';
@@ -14,6 +15,7 @@ class AnkiExportBuilder {
   Future<List<AnkiExportNote>> build({
     required List<WordEntry> words,
     required List<PhraseEntry> phrases,
+    String subtitleLetterCase = '保留原样',
   }) async {
     final List<AnkiExportNote> notes = <AnkiExportNote>[];
     final List<WordEntry> savedWords =
@@ -65,6 +67,7 @@ class AnkiExportBuilder {
           ]).replaceAll(r'\n', '\n'),
           isPhrase: false,
           contexts: contexts,
+          subtitleLetterCase: subtitleLetterCase,
         ),
       );
     }
@@ -94,6 +97,7 @@ class AnkiExportBuilder {
               .toSet()
               .join('\n'),
           isPhrase: true,
+          subtitleLetterCase: subtitleLetterCase,
           contexts: group
               .map(
                 (PhraseEntry item) => _Context(
@@ -120,6 +124,7 @@ AnkiExportNote _note({
   required String meaning,
   required bool isPhrase,
   required List<_Context> contexts,
+  required String subtitleLetterCase,
 }) {
   final Map<String, _Context> unique = <String, _Context>{};
   for (final _Context context in contexts) {
@@ -146,14 +151,18 @@ AnkiExportNote _note({
     id: id,
     isPhrase: isPhrase,
     fields: <String>[
-      _html(expression),
+      _html(
+        isPhrase
+            ? formatSubtitleLetterCase(expression, subtitleLetterCase)
+            : expression,
+      ),
       _html(phonetic),
       _html(meaning),
       examples
           .map(
             (_Context item) =>
                 '<div class="example"> '
-                '${item.english.isEmpty ? '' : '<div class="sentence">${_html(item.english)}</div>'} '
+                '${item.english.isEmpty ? '' : '<div class="sentence">${_html(formatSubtitleLetterCase(item.english, subtitleLetterCase))}</div>'} '
                 '${item.chinese.isEmpty ? '' : '<div class="translation">${_html(item.chinese)}</div>'} '
                 '<div class="source">${_html(<String>[item.source, item.time].where((String v) => v.isNotEmpty).join(' · '))}</div> '
                 '</div>',

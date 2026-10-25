@@ -44,10 +44,12 @@ class AnkiExportService {
     required List<PhraseEntry> phrases,
     required AnkiExportFormat format,
     required String deckName,
+    String subtitleLetterCase = '保留原样',
   }) async {
     final List<AnkiExportNote> notes = await builder.build(
       words: words,
       phrases: phrases,
+      subtitleLetterCase: subtitleLetterCase,
     );
     if (notes.isEmpty) throw StateError('没有可导出的收藏内容。');
     final DateTime now = DateTime.now();

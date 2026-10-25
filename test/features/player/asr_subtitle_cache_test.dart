@@ -5,6 +5,57 @@ import 'package:common_learn_english/features/settings/presentation/settings_pro
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'confirmed move preserves AI subtitles only when media metadata matches',
+    () async {
+      final Directory root = Directory.systemTemp.createTempSync('asr-relink-');
+      addTearDown(() => root.deleteSync(recursive: true));
+      final Directory oldRoot = Directory('${root.path}/old')..createSync();
+      final Directory newRoot = Directory('${root.path}/new')..createSync();
+      final AsrSubtitleCache cache = AsrSubtitleCache(
+        appSupportDirectory: () async => root,
+      );
+      final LearningSettingsState settings = LearningSettingsState.defaults();
+      final File oldVideo = File('${oldRoot.path}/video.mp4')
+        ..writeAsStringSync('video');
+      await cache.write(
+        episodeId: 'ep01',
+        videoPath: oldVideo.path,
+        content: '{"version":1,"lines":[]}',
+        settings: settings,
+      );
+      final File moved = oldVideo.renameSync('${newRoot.path}/video.mp4');
+      await cache.relinkVideo(
+        episodeId: 'ep01',
+        oldPath: oldVideo.path,
+        newPath: moved.path,
+      );
+      expect(
+        await cache.read(
+          episodeId: 'ep01',
+          videoPath: moved.path,
+          settings: settings,
+        ),
+        isNotNull,
+      );
+      final File different = File('${oldRoot.path}/video.mp4')
+        ..writeAsStringSync('different content');
+      await cache.relinkVideo(
+        episodeId: 'ep01',
+        oldPath: moved.path,
+        newPath: different.path,
+      );
+      expect(
+        await cache.read(
+          episodeId: 'ep01',
+          videoPath: different.path,
+          settings: settings,
+        ),
+        isNull,
+      );
+    },
+  );
+
   test('cache file uses episode folder and video base name', () async {
     final Directory tempDir = Directory.systemTemp.createTempSync(
       'asr-cache-test-',

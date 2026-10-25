@@ -1324,6 +1324,10 @@ class _PadPortraitPlayerScreenState
         .addFavoriteWord(
           rawWord: word,
           episodeId: widget.episodeId,
+          videoFileName: episode?.videoAsset
+              ?.replaceAll(r'\', '/')
+              .split('/')
+              .last,
           course: courseContext.course?.title ?? '课程',
           episode: '第 ${episode?.numberStr ?? '01'} 集',
           time: line.startTime,
@@ -1369,6 +1373,10 @@ class _PadPortraitPlayerScreenState
         .recordLine(
           english: line.english,
           episodeId: widget.episodeId,
+          videoFileName: episode?.videoAsset
+              ?.replaceAll(r'\', '/')
+              .split('/')
+              .last,
           course: context.course?.title ?? '课程',
           episode: '第 ${episode?.numberStr ?? '01'} 集',
           time: line.startTime,

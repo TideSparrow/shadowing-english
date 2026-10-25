@@ -25,6 +25,7 @@ class LibraryEpisodeItem {
     this.progressTimeStr,
     this.totalTimeStr,
     this.videoAsset,
+    this.videoMissing = false,
     this.enSubtitleAsset,
     this.cnSubtitleAsset,
     this.subtitleTracks = const <LibrarySubtitleTrackItem>[],
@@ -43,11 +44,17 @@ class LibraryEpisodeItem {
   final String? progressTimeStr;
   final String? totalTimeStr;
   final String? videoAsset;
+  final bool videoMissing;
   final String? enSubtitleAsset;
   final String? cnSubtitleAsset;
   final List<LibrarySubtitleTrackItem> subtitleTracks;
 
   LibraryEpisodeItem copyWith({
+    String? videoAsset,
+    String? enSubtitleAsset,
+    String? cnSubtitleAsset,
+    List<LibrarySubtitleTrackItem>? subtitleTracks,
+    bool? videoMissing,
     bool? completed,
     int? progressPercent,
     String? lastWatchedStr,
@@ -67,10 +74,11 @@ class LibraryEpisodeItem {
       lastWatchedStr: lastWatchedStr ?? this.lastWatchedStr,
       progressTimeStr: progressTimeStr ?? this.progressTimeStr,
       totalTimeStr: totalTimeStr ?? this.totalTimeStr,
-      videoAsset: videoAsset,
-      enSubtitleAsset: enSubtitleAsset,
-      cnSubtitleAsset: cnSubtitleAsset,
-      subtitleTracks: subtitleTracks,
+      videoAsset: videoAsset ?? this.videoAsset,
+      videoMissing: videoMissing ?? this.videoMissing,
+      enSubtitleAsset: enSubtitleAsset ?? this.enSubtitleAsset,
+      cnSubtitleAsset: cnSubtitleAsset ?? this.cnSubtitleAsset,
+      subtitleTracks: subtitleTracks ?? this.subtitleTracks,
     );
   }
 }
@@ -92,6 +100,8 @@ class LibraryCourseData {
     this.lastStudiedAtMs,
     required this.rating,
     required this.episodes,
+    this.videoDirectories = const <String>[],
+    this.subtitleDirectories = const <String>[],
   });
 
   final String id;
@@ -109,6 +119,8 @@ class LibraryCourseData {
   final int? lastStudiedAtMs;
   final double rating;
   final List<LibraryEpisodeItem> episodes;
+  final List<String> videoDirectories;
+  final List<String> subtitleDirectories;
 
   LibraryCourseData copyWith({
     String? title,
@@ -125,6 +137,8 @@ class LibraryCourseData {
     int? lastStudiedAtMs,
     double? rating,
     List<LibraryEpisodeItem>? episodes,
+    List<String>? videoDirectories,
+    List<String>? subtitleDirectories,
   }) {
     return LibraryCourseData(
       id: id,
@@ -142,6 +156,8 @@ class LibraryCourseData {
       lastStudiedAtMs: lastStudiedAtMs ?? this.lastStudiedAtMs,
       rating: rating ?? this.rating,
       episodes: episodes ?? this.episodes,
+      videoDirectories: videoDirectories ?? this.videoDirectories,
+      subtitleDirectories: subtitleDirectories ?? this.subtitleDirectories,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../phrases/presentation/phrase_book_provider.dart';
+import '../../settings/presentation/settings_provider.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../../words/presentation/word_book_provider.dart';
 import '../data/anki_export_service.dart';
@@ -63,6 +64,9 @@ class _AnkiExportSheetState extends ConsumerState<AnkiExportSheet> {
         ? List<PhraseEntry>.of(ref.read(phraseBookProvider))
         : <PhraseEntry>[];
     if (words.isEmpty && phrases.isEmpty || _busy) return;
+    final String letterCase = ref
+        .read(learningSettingsProvider)
+        .subtitleLetterCase;
     final RenderBox? box = context.findRenderObject() as RenderBox?;
     final Rect origin = box == null
         ? const Rect.fromLTWH(0, 0, 1, 1)
@@ -79,6 +83,7 @@ class _AnkiExportSheetState extends ConsumerState<AnkiExportSheet> {
         phrases: phrases,
         format: _format,
         deckName: _deck.text,
+        subtitleLetterCase: letterCase,
       );
       final AnkiSaveResult result = await saver.save(file, origin: origin);
       if (!mounted) return;
@@ -115,6 +120,11 @@ class _AnkiExportSheetState extends ConsumerState<AnkiExportSheet> {
         .length;
     final int phrases = ref.watch(phraseBookProvider).length;
     final int selected = (_words ? words : 0) + (_phrases ? phrases : 0);
+    final String letterCase = ref.watch(
+      learningSettingsProvider.select(
+        (LearningSettingsState settings) => settings.subtitleLetterCase,
+      ),
+    );
     return PopScope(
       canPop: !_busy,
       child: Padding(
@@ -147,9 +157,9 @@ class _AnkiExportSheetState extends ConsumerState<AnkiExportSheet> {
                 ],
               ),
               const SizedBox(height: 6),
-              const Text(
-                '导出收藏的单词、短语和台词语境。',
-                style: TextStyle(
+              Text(
+                '导出收藏的单词、短语和台词语境。英文语境和短语大小写：$letterCase（跟随设置）。',
+                style: const TextStyle(
                   color: AppDesignTokens.textPrimary,
                   height: 1.5,
                 ),

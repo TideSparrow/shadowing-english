@@ -55,6 +55,37 @@ class AsrSubtitleCache {
     required String videoPath,
   }) async => await read(episodeId: episodeId, videoPath: videoPath) != null;
 
+  /// Retain generated subtitles after an explicitly confirmed directory move.
+  /// Different media must continue to fail normal cache validation.
+  Future<void> relinkVideo({
+    required String episodeId,
+    required String oldPath,
+    required String newPath,
+  }) async {
+    final File oldCache = await cacheFileFor(
+      episodeId: episodeId,
+      videoPath: oldPath,
+    );
+    final File newCache = await cacheFileFor(
+      episodeId: episodeId,
+      videoPath: newPath,
+    );
+    if (oldCache.path != newCache.path || !oldCache.existsSync()) return;
+    final File metadata = _metadataFile(oldCache);
+    if (!metadata.existsSync()) return;
+    final Object? decoded = jsonDecode(await metadata.readAsString());
+    if (decoded is! Map<String, dynamic>) return;
+    final File video = File(newPath);
+    final FileStat stat = video.statSync();
+    if (decoded['videoPath'] != File(oldPath).absolute.path ||
+        decoded['videoSize'] != stat.size ||
+        decoded['videoModifiedMs'] != stat.modified.millisecondsSinceEpoch) {
+      return;
+    }
+    decoded['videoPath'] = video.absolute.path;
+    _writeAtomically(metadata, jsonEncode(decoded));
+  }
+
   Future<String?> read({
     required String episodeId,
     required String videoPath,

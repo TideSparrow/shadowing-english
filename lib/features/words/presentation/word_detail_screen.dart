@@ -4,16 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../library/presentation/course_directory_relink.dart';
 import '../../library/presentation/library_catalog_provider.dart';
-import '../../player/presentation/player_course_lookup.dart';
-import '../../player/presentation/player_media_source.dart';
 import '../../settings/presentation/settings_provider.dart';
 import '../../shared/data/word_lookup_service.dart';
 import '../../shared/data/word_pronunciation_service.dart';
+import '../../shared/domain/subtitle_letter_case.dart';
 import '../../shared/domain/word_lookup_entry.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../data/offline_word_dictionary.dart';
 import 'word_book_provider.dart';
+import 'word_video_relink.dart';
 
 class WordDetailDialog extends ConsumerStatefulWidget {
   const WordDetailDialog({required this.word, super.key});
@@ -29,6 +30,7 @@ class _WordDetailDialogState extends ConsumerState<WordDetailDialog> {
   bool _loadingOfflineDefinition = true;
   bool _translatingWithApi = false;
   String? _speakingText;
+  bool _openingVideo = false;
   final Set<String> _translatingContextKeys = <String>{};
 
   @override
@@ -118,27 +120,91 @@ class _WordDetailDialogState extends ConsumerState<WordDetailDialog> {
     WordOccurrence occurrence,
     WordContext contextItem,
   ) async {
-    final PlayerCourseLookupResult result = resolvePlayerCourseForEpisode(
-      courses: ref.read(libraryCatalogProvider),
-      episodeId: occurrence.episodeId,
-    );
-    final String? video = result.videoAsset;
-    if (!result.hasEpisode ||
-        video == null ||
-        video.isEmpty ||
-        !playerMediaAvailable(video)) {
-      if (mounted) _showMessage('该视频资源已不在设备中，请重新导入课程。');
-      return;
+    if (_openingVideo) return;
+    _openingVideo = true;
+    try {
+      await _resolveAndOpenVideo(occurrence, contextItem);
+    } finally {
+      _openingVideo = false;
     }
-    if (mounted) {
-      final GoRouter router = GoRouter.of(context);
-      Navigator.of(context, rootNavigator: true).pop();
-      unawaited(
-        router.push(
-          '/episodes/${occurrence.episodeId}?startTime=${Uri.encodeComponent(contextItem.time)}&autoplay=1',
+  }
+
+  Future<void> _resolveAndOpenVideo(
+    WordOccurrence occurrence,
+    WordContext contextItem,
+  ) async {
+    final List<WordVideoCandidate> candidates = resolveWordVideoCandidates(
+      courses: ref.read(libraryCatalogProvider),
+      occurrence: occurrence,
+    );
+    WordVideoCandidate? target = candidates.length == 1
+        ? candidates.single
+        : null;
+    if (target == null) {
+      final List<WordVideoCandidate> options = candidates.isNotEmpty
+          ? candidates
+          : availableWordVideos(ref.read(libraryCatalogProvider));
+      if (options.isEmpty) {
+        _showMessage('未找到可播放的视频，请在课程的“资源目录”中重新关联目录。');
+        return;
+      }
+      target = await showDialog<WordVideoCandidate>(
+        context: context,
+        builder: (BuildContext dialogContext) => SimpleDialog(
+          title: const Text('重新关联影片'),
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Text('无法唯一确定原视频，请选择对应剧集。此次关联也会用于该剧集的其他旧生词。'),
+            ),
+            for (final WordVideoCandidate candidate in options)
+              SimpleDialogOption(
+                onPressed: () => Navigator.of(dialogContext).pop(candidate),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '${candidate.course.title} · ${candidate.episode.title}',
+                    ),
+                    Text(
+                      candidate.episode.videoAsset!,
+                      style: Theme.of(dialogContext).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+          ],
         ),
       );
     }
+    if (target == null || !mounted) return;
+    final WordVideoCandidate resolved = target;
+    try {
+      await ref
+          .read(wordBookProvider.notifier)
+          .relinkEpisode(
+            oldEpisodeId: occurrence.episodeId,
+            newEpisodeId: resolved.episode.id,
+            course: resolved.course.title,
+            episode: '第 ${resolved.episode.numberStr} 集',
+            videoFileName: resourceFileName(resolved.episode.videoAsset!),
+          );
+    } catch (_) {
+      if (mounted) _showMessage('保存影片关联失败，请重试。');
+      return;
+    }
+    if (!mounted) return;
+    final GoRouter router = GoRouter.of(context);
+    Navigator.of(context, rootNavigator: true).pop();
+    unawaited(
+      router.push(
+        '/episodes/${Uri.encodeComponent(resolved.episode.id)}?startTime=${Uri.encodeComponent(contextItem.time)}&autoplay=1',
+      ),
+    );
   }
 
   void _showMessage(String message) {
@@ -159,6 +225,11 @@ class _WordDetailDialogState extends ConsumerState<WordDetailDialog> {
       );
     }
     final OfflineWordDefinition? offline = _offlineDefinition;
+    final String letterCase = ref.watch(
+      learningSettingsProvider.select(
+        (LearningSettingsState s) => s.subtitleLetterCase,
+      ),
+    );
     return Dialog(
       insetPadding: const EdgeInsets.all(20),
       child: ConstrainedBox(
@@ -224,6 +295,10 @@ class _WordDetailDialogState extends ConsumerState<WordDetailDialog> {
                         child: _OccurrenceCard(
                           occurrence: occurrence,
                           contextItem: contextItem,
+                          displaySentence: formatSubtitleLetterCase(
+                            contextItem.sentence,
+                            letterCase,
+                          ),
                           speaking: _speakingText == contextItem.sentence,
                           onSpeak: () => _speak(contextItem.sentence),
                           onOpenVideo: () =>
@@ -377,6 +452,7 @@ class _OccurrenceCard extends StatelessWidget {
   const _OccurrenceCard({
     required this.occurrence,
     required this.contextItem,
+    required this.displaySentence,
     required this.speaking,
     required this.onSpeak,
     required this.onOpenVideo,
@@ -386,6 +462,7 @@ class _OccurrenceCard extends StatelessWidget {
 
   final WordOccurrence occurrence;
   final WordContext contextItem;
+  final String displaySentence;
   final bool speaking;
   final VoidCallback onSpeak;
   final VoidCallback onOpenVideo;
@@ -407,7 +484,7 @@ class _OccurrenceCard extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          contextItem.sentence,
+          displaySentence,
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         if (contextItem.chinese.isNotEmpty) ...<Widget>[

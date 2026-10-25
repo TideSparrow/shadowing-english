@@ -5,6 +5,7 @@ import 'package:common_learn_english/features/anki_export/data/anki_export_servi
 import 'package:common_learn_english/features/anki_export/domain/anki_export_note.dart';
 import 'package:common_learn_english/features/anki_export/presentation/anki_export_sheet.dart';
 import 'package:common_learn_english/features/phrases/presentation/phrase_book_provider.dart';
+import 'package:common_learn_english/features/settings/presentation/settings_provider.dart';
 import 'package:common_learn_english/features/words/data/offline_word_dictionary.dart';
 import 'package:common_learn_english/features/words/presentation/word_book_provider.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +17,11 @@ class Words extends WordBookNotifier {
   @override
   List<WordEntry> build() => const <WordEntry>[
     WordEntry(word: 'saved', favorite: true, occurrences: <WordOccurrence>[]),
-    WordEntry(word: 'unsaved', favorite: false, occurrences: <WordOccurrence>[]),
+    WordEntry(
+      word: 'unsaved',
+      favorite: false,
+      occurrences: <WordOccurrence>[],
+    ),
   ];
 }
 
@@ -34,14 +39,17 @@ class Exporter extends AnkiExportService {
   Exporter() : super(AnkiExportBuilder(OfflineWordDictionary()));
   bool fail = false;
   int calls = 0;
+  String? lastLetterCase;
   @override
   Future<AnkiExportFile> generate({
     required List<WordEntry> words,
     required List<PhraseEntry> phrases,
     required AnkiExportFormat format,
     required String deckName,
+    String subtitleLetterCase = '保留原样',
   }) async {
     calls++;
+    lastLetterCase = subtitleLetterCase;
     expect(words.map((WordEntry w) => w.word), <String>['saved']);
     expect(format, AnkiExportFormat.apkg);
     if (fail) throw StateError('test');
@@ -64,7 +72,7 @@ class Saver extends AnkiExportSaver {
 }
 
 void main() {
-  Future<void> mount(
+  Future<ProviderContainer> mount(
     WidgetTester tester,
     Exporter exporter,
     Saver saver, {
@@ -73,14 +81,18 @@ void main() {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
+    final ProviderContainer container = ProviderContainer(
+      overrides: <Override>[
+        wordBookProvider.overrideWith(empty ? EmptyWords.new : Words.new),
+        phraseBookProvider.overrideWith(Phrases.new),
+        ankiExportServiceProvider.overrideWithValue(exporter),
+        ankiExportSaverProvider.overrideWithValue(saver),
+      ],
+    );
+    addTearDown(container.dispose);
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: <Override>[
-          wordBookProvider.overrideWith(empty ? EmptyWords.new : Words.new),
-          phraseBookProvider.overrideWith(Phrases.new),
-          ankiExportServiceProvider.overrideWithValue(exporter),
-          ankiExportSaverProvider.overrideWithValue(saver),
-        ],
+      UncontrolledProviderScope(
+        container: container,
         child: MaterialApp(
           home: Scaffold(
             body: Builder(
@@ -95,6 +107,7 @@ void main() {
     );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
+    return container;
   }
 
   testWidgets('default package, favorites snapshot, cancellation and retry', (
@@ -122,9 +135,38 @@ void main() {
     expect(exporter.calls, 3);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('export reads the latest letter-case setting when clicked', (
+    WidgetTester tester,
+  ) async {
+    final Exporter exporter = Exporter();
+    final ProviderContainer container = await mount(tester, exporter, Saver());
+    container
+        .read(learningSettingsProvider.notifier)
+        .setSubtitleLetterCase('全部大写');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('大小写：全部大写'), findsOneWidget);
+    container
+        .read(learningSettingsProvider.notifier)
+        .setSubtitleLetterCase('全部小写');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('导出文件'));
+    await tester.tap(find.text('导出文件'));
+    await tester.pumpAndSettle();
+    expect(exporter.lastLetterCase, '全部小写');
+    container
+        .read(learningSettingsProvider.notifier)
+        .setSubtitleLetterCase('句首字母大写');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('导出文件'));
+    await tester.pumpAndSettle();
+    expect(exporter.lastLetterCase, '句首字母大写');
+  });
+
   testWidgets('empty collection disables export', (WidgetTester tester) async {
     await mount(tester, Exporter(), Saver(), empty: true);
-    final FilledButton button = tester.widget<FilledButton>(find.byType(FilledButton));
+    final FilledButton button = tester.widget<FilledButton>(
+      find.byType(FilledButton),
+    );
     expect(button.onPressed, isNull);
     expect(find.text('还没有收藏内容，先去收藏单词或短语吧。'), findsOneWidget);
   });

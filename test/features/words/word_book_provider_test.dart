@@ -116,6 +116,28 @@ void main() {
     expect(container.read(wordBookProvider).single.favorite, isFalse);
   });
 
+  test(
+    'dictionary cleanup preserves saved words missing from the offline dictionary',
+    () async {
+      final ProviderContainer container = ProviderContainer(
+        // ignore: always_specify_types
+        overrides: [
+          wordBookProvider.overrideWith(_HistoricalWords.new),
+          offlineWordDictionaryProvider.overrideWithValue(_MissingDictionary()),
+        ],
+      );
+      addTearDown(container.dispose);
+      final WordEntry original = container.read(wordBookProvider).first;
+      container.read(wordBookProvider.notifier).refreshOfflineDefinitions();
+      await Future<void>.delayed(Duration.zero);
+      final List<WordEntry> words = container.read(wordBookProvider);
+      expect(words, hasLength(1));
+      expect(words.single.toJson(), original.toJson());
+      expect(words.single.favorite, isTrue);
+      expect(words.single.occurrences.single.time, '00:51');
+    },
+  );
+
   test('edits and deletes a word entry', () {
     final ProviderContainer container = _wordBookContainer();
     addTearDown(container.dispose);
@@ -174,4 +196,47 @@ class _TestWordDictionary extends OfflineWordDictionary {
       partOfSpeech: '',
     );
   }
+}
+
+class _MissingDictionary extends OfflineWordDictionary {
+  @override
+  Future<OfflineWordDefinition?> lookup(String rawWord) async => null;
+}
+
+class _HistoricalWords extends WordBookNotifier {
+  @override
+  List<WordEntry> build() => const <WordEntry>[
+    WordEntry(
+      word: 'puddles',
+      favorite: true,
+      definitionCn: '水坑',
+      occurrences: <WordOccurrence>[
+        WordOccurrence(
+          episodeId: 'old-episode',
+          course: '小猪佩奇',
+          episode: '第 01 集',
+          time: '00:51',
+          sentence: 'Peppa loves jumping in muddy puddles.',
+          chinese: '旧语境',
+          count: 1,
+          lineKeys: <String>['51584-53279'],
+          contexts: <WordContext>[
+            WordContext(
+              lineKey: '51584-53279',
+              time: '00:51',
+              sentence: 'Peppa loves jumping in muddy puddles.',
+              chinese: '旧语境',
+              count: 1,
+              apiTranslationCn: '原翻译',
+            ),
+          ],
+        ),
+      ],
+    ),
+    WordEntry(
+      word: 'uncollected',
+      favorite: false,
+      occurrences: <WordOccurrence>[],
+    ),
+  ];
 }

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce/hive.dart';
 
 import '../../import_course/domain/import_match.dart';
+import '../../player/presentation/asr_subtitle_cache.dart';
+import 'course_directory_relink.dart';
 import 'library_mock_data.dart';
 
 const String _libraryCatalogStorageKey = 'imported_library_courses_v1';
@@ -63,6 +65,57 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
     ];
     await _persistImportedCourses();
     return true;
+  }
+
+  Future<void> relinkDirectory({
+    required CourseDirectoryRelinkPlan plan,
+    required Map<String, String> selections,
+    required Set<String> addedVideoPaths,
+    AsrSubtitleCache subtitleCache = const AsrSubtitleCache(),
+  }) async {
+    for (final String path in <String>{
+      ...selections.values,
+      ...addedVideoPaths,
+    }) {
+      if (!File(path).existsSync()) {
+        throw StateError('部分文件已移动或无法访问，请重新扫描。');
+      }
+    }
+    final int index = state.indexWhere(
+      (LibraryCourseData item) => item.id == plan.course.id,
+    );
+    if (index < 0) throw StateError('课程已被删除，请重新打开。');
+    final LibraryCourseData current = state[index];
+    if (!plan.isCurrent(current)) throw StateError('课程资源已变化，请重新扫描。');
+    final LibraryCourseData updated = plan.apply(
+      current,
+      selections,
+      addedVideoPaths,
+    );
+    // Persist before publishing, so a failed write cannot leave a partial update.
+    final List<LibraryCourseData> next = <LibraryCourseData>[...state];
+    next[index] = updated;
+    if (Hive.isBoxOpen('prefs')) {
+      await Hive.box<String>('prefs').put(
+        _libraryCatalogStorageKey,
+        jsonEncode(next.map(_serializeCourse).toList()),
+      );
+    }
+    state = next;
+    for (final LibraryEpisodeItem episode in current.episodes) {
+      final String? oldPath = episode.videoAsset;
+      final String? newPath = selections[oldPath];
+      if (oldPath == null || newPath == null || oldPath == newPath) continue;
+      try {
+        await subtitleCache.relinkVideo(
+          episodeId: episode.id,
+          oldPath: oldPath,
+          newPath: newPath,
+        );
+      } catch (_) {
+        // Optional cache metadata must never prevent a confirmed directory move.
+      }
+    }
   }
 
   Future<void> updateCoursesMetadata({
@@ -224,6 +277,9 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
     if (newRows.isEmpty) {
       return false;
     }
+    final Set<String> occupiedIds =
+        targetCourse?.episodes.map((LibraryEpisodeItem e) => e.id).toSet() ??
+        <String>{};
     final List<LibraryEpisodeItem> episodes = <LibraryEpisodeItem>[
       for (int index = 0; index < newRows.length; index++)
         _buildEpisodeItem(
@@ -233,6 +289,7 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
             courseId,
             newRows[index],
             (targetCourse?.episodes.length ?? 0) + index,
+            occupiedIds,
           ),
           coverImage: '',
         ),
@@ -250,6 +307,14 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
                     description: '已导入课程 ${mergedEpisodes.length} 集',
                     totalEpisodes: mergedEpisodes.length,
                     episodes: mergedEpisodes,
+                    videoDirectories: <String>{
+                      ...course.videoDirectories,
+                      videoFolder,
+                    }.where((String path) => path.isNotEmpty).toList(),
+                    subtitleDirectories: <String>{
+                      ...course.subtitleDirectories,
+                      subtitleFolder,
+                    }.where((String path) => path.isNotEmpty).toList(),
                   )
                 : course,
           )
@@ -261,6 +326,12 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
     return importCourse(
       LibraryCourseData(
         id: courseId,
+        videoDirectories: videoFolder.isEmpty
+            ? const <String>[]
+            : <String>[videoFolder],
+        subtitleDirectories: subtitleFolder.isEmpty
+            ? const <String>[]
+            : <String>[subtitleFolder],
         title: courseTitle == null || courseTitle.trim().isEmpty
             ? _buildCourseTitle(videoFolder, rows)
             : courseTitle.trim(),
@@ -307,6 +378,8 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
   Map<String, Object?> _serializeCourse(LibraryCourseData course) {
     return <String, Object?>{
       'id': course.id,
+      'videoDirectories': course.videoDirectories,
+      'subtitleDirectories': course.subtitleDirectories,
       'title': course.title,
       'description': course.description,
       'sourceLabel': course.sourceLabel,
@@ -336,6 +409,7 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
               'progressTimeStr': item.progressTimeStr,
               'totalTimeStr': item.totalTimeStr,
               'videoAsset': item.videoAsset,
+              'videoMissing': item.videoMissing,
               'enSubtitleAsset': item.enSubtitleAsset,
               'cnSubtitleAsset': item.cnSubtitleAsset,
               'subtitleTracks': item.subtitleTracks
@@ -366,6 +440,14 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
 
             return LibraryCourseData(
               id: courseJson['id']! as String,
+              videoDirectories:
+                  (courseJson['videoDirectories'] as List<Object?>? ??
+                          const <Object?>[])
+                      .cast<String>(),
+              subtitleDirectories:
+                  (courseJson['subtitleDirectories'] as List<Object?>? ??
+                          const <Object?>[])
+                      .cast<String>(),
               title: courseJson['title']! as String,
               description: courseJson['description']! as String,
               sourceLabel: courseJson['sourceLabel'] as String? ?? '本地资源',
@@ -426,6 +508,7 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
 
     return LibraryEpisodeItem(
       id: resolvedId,
+      videoMissing: json['videoMissing'] as bool? ?? false,
       numberStr: json['numberStr']! as String,
       title: json['title']! as String,
       durationMinutes: json['durationMinutes']! as int,
@@ -524,9 +607,18 @@ class LibraryCatalogNotifier extends Notifier<List<LibraryCourseData>> {
     return ImportMatcher.isImportablePath(path) ? path : null;
   }
 
-  String _buildEpisodeId(String courseId, ImportMatchRow row, int index) {
-    final int episodeNumber = index + 1;
-    return '$courseId-ep${episodeNumber.toString().padLeft(2, '0')}';
+  String _buildEpisodeId(
+    String courseId,
+    ImportMatchRow row,
+    int index,
+    Set<String> occupiedIds,
+  ) {
+    int episodeNumber = index + 1;
+    String id;
+    do {
+      id = '$courseId-ep${(episodeNumber++).toString().padLeft(2, '0')}';
+    } while (!occupiedIds.add(id));
+    return id;
   }
 
   LibraryEpisodeItem _buildEpisodeItem(

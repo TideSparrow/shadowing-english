@@ -14,6 +14,7 @@ final NotifierProvider<WordBookNotifier, List<WordEntry>> wordBookProvider =
 class WordOccurrence {
   const WordOccurrence({
     required this.episodeId,
+    this.videoFileName,
     required this.course,
     required this.episode,
     required this.time,
@@ -26,6 +27,7 @@ class WordOccurrence {
 
   factory WordOccurrence.fromJson(Map<String, Object?> json) => WordOccurrence(
     episodeId: json['episodeId']! as String,
+    videoFileName: json['videoFileName'] as String?,
     course: json['course']! as String,
     episode: json['episode']! as String,
     time: json['time']! as String,
@@ -55,6 +57,7 @@ class WordOccurrence {
   );
 
   final String episodeId;
+  final String? videoFileName;
   final String course;
   final String episode;
   final String time;
@@ -65,13 +68,18 @@ class WordOccurrence {
   final List<WordContext> contexts;
 
   WordOccurrence copyWith({
+    String? episodeId,
+    String? course,
+    String? episode,
+    String? videoFileName,
     int? count,
     List<String>? lineKeys,
     List<WordContext>? contexts,
   }) => WordOccurrence(
-    episodeId: episodeId,
-    course: course,
-    episode: episode,
+    episodeId: episodeId ?? this.episodeId,
+    course: course ?? this.course,
+    episode: episode ?? this.episode,
+    videoFileName: videoFileName ?? this.videoFileName,
     time: time,
     sentence: sentence,
     chinese: chinese,
@@ -82,6 +90,7 @@ class WordOccurrence {
 
   Map<String, Object?> toJson() => <String, Object?>{
     'episodeId': episodeId,
+    'videoFileName': videoFileName,
     'course': course,
     'episode': episode,
     'time': time,
@@ -214,6 +223,7 @@ class WordBookNotifier extends Notifier<List<WordEntry>> {
   Future<void> recordLine({
     required String english,
     required String episodeId,
+    String? videoFileName,
     required String course,
     required String episode,
     required String time,
@@ -259,6 +269,7 @@ class WordBookNotifier extends Notifier<List<WordEntry>> {
       if (occurrenceIndex < 0) {
         final WordOccurrence occurrence = WordOccurrence(
           episodeId: episodeId,
+          videoFileName: videoFileName,
           course: course,
           episode: episode,
           time: time,
@@ -345,6 +356,7 @@ class WordBookNotifier extends Notifier<List<WordEntry>> {
   bool addFavoriteWord({
     required String rawWord,
     required String episodeId,
+    String? videoFileName,
     required String course,
     required String episode,
     required String time,
@@ -381,6 +393,7 @@ class WordBookNotifier extends Notifier<List<WordEntry>> {
           occurrences: <WordOccurrence>[
             WordOccurrence(
               episodeId: episodeId,
+              videoFileName: videoFileName,
               course: course,
               episode: episode,
               time: time,
@@ -415,6 +428,7 @@ class WordBookNotifier extends Notifier<List<WordEntry>> {
         occurrences.add(
           WordOccurrence(
             episodeId: episodeId,
+            videoFileName: videoFileName,
             course: course,
             episode: episode,
             time: time,
@@ -439,6 +453,84 @@ class WordBookNotifier extends Notifier<List<WordEntry>> {
     unawaited(_persist());
     unawaited(_fillOfflineDefinitions(<String>[word]));
     return true;
+  }
+
+  Future<void> relinkEpisode({
+    required String oldEpisodeId,
+    required String newEpisodeId,
+    required String course,
+    required String episode,
+    required String videoFileName,
+  }) async {
+    final List<WordEntry> previous = state;
+    final List<WordEntry> updated = state.map((WordEntry entry) {
+      if (!entry.occurrences.any(
+        (WordOccurrence o) => o.episodeId == oldEpisodeId,
+      )) {
+        return entry;
+      }
+      final List<WordOccurrence> occurrences = <WordOccurrence>[];
+      for (final WordOccurrence old in entry.occurrences) {
+        final WordOccurrence item = old.episodeId == oldEpisodeId
+            ? old.copyWith(
+                episodeId: newEpisodeId,
+                course: course,
+                episode: episode,
+                videoFileName: videoFileName,
+              )
+            : old;
+        final int index = occurrences.indexWhere(
+          (WordOccurrence o) => o.episodeId == item.episodeId,
+        );
+        if (index < 0) {
+          occurrences.add(item);
+          continue;
+        }
+        final WordOccurrence existing = occurrences[index];
+        final Map<String, WordContext> contexts = <String, WordContext>{
+          for (final WordContext c in existing.contexts) c.lineKey: c,
+        };
+        for (final WordContext c in item.contexts) {
+          final WordContext? stored = contexts[c.lineKey];
+          contexts[c.lineKey] = stored == null
+              ? c
+              : stored.copyWith(
+                  apiTranslationCn:
+                      stored.apiTranslationCn ?? c.apiTranslationCn,
+                );
+        }
+        occurrences[index] = existing.copyWith(
+          course: item.episodeId == newEpisodeId ? course : null,
+          episode: item.episodeId == newEpisodeId ? episode : null,
+          videoFileName: item.episodeId == newEpisodeId ? videoFileName : null,
+          contexts: contexts.values.toList(),
+          lineKeys: <String>{...existing.lineKeys, ...item.lineKeys}.toList(),
+          count: contexts.values.fold<int>(
+            0,
+            (int n, WordContext c) => n + c.count,
+          ),
+        );
+      }
+      return entry.copyWith(occurrences: occurrences);
+    }).toList();
+    // Write the complete replacement once; leave current state intact on failure.
+    if (Hive.isBoxOpen('prefs')) {
+      await Hive.box<String>('prefs').put(
+        _wordBookStorageKey,
+        jsonEncode(updated.map((WordEntry e) => e.toJson()).toList()),
+      );
+    }
+    if (identical(state, previous)) {
+      state = updated;
+    } else {
+      await relinkEpisode(
+        oldEpisodeId: oldEpisodeId,
+        newEpisodeId: newEpisodeId,
+        course: course,
+        episode: episode,
+        videoFileName: videoFileName,
+      );
+    }
   }
 
   void setDefinition(String rawWord, String definitionCn) {
@@ -526,7 +618,12 @@ class WordBookNotifier extends Notifier<List<WordEntry>> {
           if (definitions[index] != null) candidates[index].word,
       };
       final List<WordEntry> next = state
-          .where((WordEntry entry) => validWords.contains(entry.word))
+          // A dictionary miss is not evidence that a saved word is invalid.
+          // Favorites are user data, including inflections and custom entries.
+          .where(
+            (WordEntry entry) =>
+                entry.favorite || validWords.contains(entry.word),
+          )
           .toList(growable: false);
       if (next.length == state.length) return;
       state = next;

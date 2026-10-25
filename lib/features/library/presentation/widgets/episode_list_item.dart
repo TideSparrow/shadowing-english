@@ -35,9 +35,7 @@ class EpisodeListItem extends StatelessWidget {
       child: Ink(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xFFEFFFF5)
-              : AppDesignTokens.appWhite,
+          color: selected ? const Color(0xFFEFFFF5) : AppDesignTokens.appWhite,
           borderRadius: BorderRadius.circular(26),
           border: Border.all(
             color: selected
@@ -110,6 +108,13 @@ class EpisodeListItem extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: <Widget>[
+                      if (item.videoMissing)
+                        const _InfoChip(
+                          icon: Icons.warning_amber_rounded,
+                          label: '文件缺失',
+                          backgroundColor: Color(0xFFFFE1E1),
+                          textColor: Color(0xFFBA1A1A),
+                        ),
                       const _InfoChip(
                         icon: Icons.closed_caption_rounded,
                         label: '英文字幕',
@@ -190,8 +195,8 @@ class EpisodeListItem extends StatelessWidget {
 
   String _progressStatusText(LibraryEpisodeItem item) {
     final int totalSeconds = item.durationMinutes * 60;
-    final int progressSeconds =
-        (totalSeconds * item.progressPercent / 100).round();
+    final int progressSeconds = (totalSeconds * item.progressPercent / 100)
+        .round();
     final String progress = (item.progressTimeStr?.isNotEmpty ?? false)
         ? item.progressTimeStr!
         : _formatSeconds(progressSeconds);
@@ -207,6 +212,7 @@ class EpisodeListItem extends StatelessWidget {
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }
+
 class _InfoChip extends StatelessWidget {
   const _InfoChip({
     required this.icon,

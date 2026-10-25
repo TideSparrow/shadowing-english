@@ -24,6 +24,7 @@ import '../../words/data/offline_word_dictionary.dart';
 import 'library_catalog_provider.dart';
 import 'library_mock_data.dart';
 import 'widgets/course_overview_card.dart';
+import 'widgets/course_resource_directory_dialog.dart';
 import 'widgets/episode_list_item.dart';
 import 'widgets/library_course_card.dart';
 import 'widgets/library_course_list_item.dart';
@@ -218,9 +219,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       (LibraryCourseData course) => course.id == selectedCourse.id,
       orElse: () => courses.isEmpty ? emptyLibraryCourse : courses.first,
     );
-    if (currentCourse.id != selectedCourse.id) {
-      selectedCourse = currentCourse;
-    }
+    selectedCourse = currentCourse;
 
     final List<LibraryCourseData> filteredCourses = courses
         .where((LibraryCourseData course) {
@@ -385,6 +384,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                                 'episodeId': activeEpisode.id,
                               },
                             ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () => _showResourceDirectory(selectedCourse),
+                        icon: const Icon(Icons.folder_open_outlined),
+                        label: const Text('资源目录'),
+                      ),
                     ),
                     SizedBox(height: compact ? 20 : 28),
                     Container(
@@ -787,6 +794,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                               selected: selectedCourseIds.contains(course.id),
                               selectionMode: editMode,
                               onTap: () => _handleCourseTap(course),
+                              onResourceDirectory: () => _showResourceDirectory(course),
                             ),
                           );
                         })
@@ -803,6 +811,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                               selected: selectedCourseIds.contains(course.id),
                               selectionMode: editMode,
                               onTap: () => _handleCourseTap(course),
+                              onResourceDirectory: () => _showResourceDirectory(course),
                             ),
                           );
                         })
@@ -836,6 +845,20 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               },
             ),
     );
+  }
+
+  Future<void> _showResourceDirectory(LibraryCourseData course) async {
+    final bool? updated = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) =>
+          CourseResourceDirectoryDialog(courseId: course.id),
+    );
+    if ((updated ?? false) && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('资源目录已更新，学习进度和生词已保留。')),
+      );
+    }
   }
 
   void _openCourse(LibraryCourseData course) {

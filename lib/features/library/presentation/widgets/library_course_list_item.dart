@@ -8,6 +8,7 @@ class LibraryCourseListItem extends StatelessWidget {
   const LibraryCourseListItem({
     required this.course,
     required this.onTap,
+    this.onResourceDirectory,
     this.selected = false,
     this.selectionMode = false,
     super.key,
@@ -15,6 +16,7 @@ class LibraryCourseListItem extends StatelessWidget {
 
   final LibraryCourseData course;
   final VoidCallback onTap;
+  final VoidCallback? onResourceDirectory;
   final bool selected;
   final bool selectionMode;
 
@@ -89,6 +91,16 @@ class LibraryCourseListItem extends StatelessWidget {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(6),
                             ),
+                          ),
+                        )
+                      else if (onResourceDirectory != null)
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: IconButton.filledTonal(
+                            tooltip: '资源目录',
+                            onPressed: onResourceDirectory,
+                            icon: const Icon(Icons.folder_open_outlined),
                           ),
                         )
                       else if (isNewCourse)

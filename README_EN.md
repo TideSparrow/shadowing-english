@@ -62,6 +62,7 @@ Short loops keep auditory recognition and spoken output together. A few lines at
 ## Key features
 
 - **Local video import**: Build a personal library from video folders on your device.
+- **Course resource directories**: View video and subtitle locations from a course card or its details. On desktop, preview and relink moved folders while retaining learning progress and vocabulary; missing episodes stay in the library, and new videos are imported only when selected.
 - **Subtitle import and matching**: Import `.srt` or `.vtt` files; match subtitles to videos from filenames and episode markers.
 - **Sentence-level navigation**: Tap a subtitle line to jump to the right point in the video.
 - **Replay and loop a line**: Replay the current sentence quickly or enable sentence looping.
@@ -69,8 +70,8 @@ Short loops keep auditory recognition and spoken output together. A few lines at
 - **Word lookup from subtitles**: Tap a word for its definition while it is still in context.
 - **Full word-by-word transcript**: The active sentence and word follow playback in the complete transcript reader.
 - **Tap words in video subtitles**: Look up words directly from the subtitle over the video.
-- **Saved words and phrases**: Keep useful vocabulary and expressions in dedicated review spaces.
-- **Anki export**: Export saved words and phrases as a ready-to-import `.apkg` deck or TSV/CSV, including pronunciation, meaning, multiple subtitle contexts, translations, and episode timestamps.
+- **Saved words and phrases**: Keep useful vocabulary and expressions in dedicated review spaces. Reconnect historical words to reimported videos at their original timestamps; context sentences follow subtitle letter-case settings while preserving the original text.
+- **Anki export**: Export saved words and phrases as a ready-to-import `.apkg` deck or TSV/CSV, including pronunciation, meaning, multiple subtitle contexts, translations, and episode timestamps. English contexts and phrases follow the subtitle letter-case setting at export time; saved originals remain unchanged.
 - **Shadowing practice**: Record each shadowing session as part of your learning activity.
 - **Learning progress**: Track study time, sentences, phrases, course progress, levels, and achievements.
 - **Optional AI subtitles**: Generate or switch subtitles for videos without them using your own provider configuration.
