@@ -8,7 +8,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../router/app_router.dart';
 import '../../navigation/presentation/navigation_destination.dart';
+import '../../settings/presentation/settings_provider.dart';
 import '../../shared/data/word_pronunciation_service.dart';
+import '../../shared/domain/subtitle_letter_case.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../../shared/presentation/pad/pad_scaffold.dart';
 import '../../shared/presentation/pad/pad_top_bar.dart';
@@ -723,6 +725,11 @@ class _DailyReviewScreenState extends ConsumerState<DailyReviewScreen>
   Widget _buildStudy(ReviewSource source, ReviewRecord record) {
     final bool completed = _completedKeys.contains(source.key);
     final DateTime now = ref.read(reviewClockProvider)();
+    final String letterCase = ref.watch(
+      learningSettingsProvider.select(
+        (LearningSettingsState settings) => settings.subtitleLetterCase,
+      ),
+    );
     return _ReviewSurface(
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -822,6 +829,8 @@ class _DailyReviewScreenState extends ConsumerState<DailyReviewScreen>
               Text(
                 source.answer.trim().isEmpty
                     ? '暂无单词释义，可以结合下方原句回忆，或在单词本补充。'
+                    : source.kind == ReviewKind.phrase
+                    ? formatSubtitleLetterCase(source.answer, letterCase)
                     : source.answer,
                 style: const TextStyle(
                   fontSize: 23,
@@ -834,7 +843,7 @@ class _DailyReviewScreenState extends ConsumerState<DailyReviewScreen>
                   source.english.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 16),
                 Text(
-                  source.english,
+                  formatSubtitleLetterCase(source.english, letterCase),
                   style: const TextStyle(fontSize: 16, height: 1.6),
                 ),
                 if (source.chinese.isNotEmpty)
@@ -1025,6 +1034,7 @@ class _DailyReviewScreenState extends ConsumerState<DailyReviewScreen>
   );
 
   void _advanceCard(String key) {
+    if (_speaking) unawaited(_speech?.stop());
     if (_sessionScroll.hasClients) _sessionScroll.jumpTo(0);
     setState(() {
       _completedKeys.add(key);
@@ -1063,6 +1073,7 @@ class _DailyReviewScreenState extends ConsumerState<DailyReviewScreen>
   }
 
   Future<void> _speak(String text) async {
+    if (_speaking) return;
     setState(() => _speaking = true);
     try {
       _speech = ref.read(wordPronunciationServiceProvider);

@@ -10,6 +10,17 @@ import '../../shared/domain/subtitle_letter_case.dart';
 export '../../shared/domain/subtitle_letter_case.dart'
     show subtitleLetterCaseOptions;
 
+const List<double> ttsRateOptions = <double>[
+  0.5,
+  0.75,
+  1,
+  1.25,
+  1.5,
+  2,
+  2.5,
+  3,
+];
+
 const List<String> playerFontOptions = <String>['小', '中', '大'];
 const List<String> subtitleWordHighlightStyleOptions = <String>[
   '绿色填充',
@@ -619,7 +630,9 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
   }
 
   void setTtsRate(double value) {
-    state = state.copyWith(ttsRate: value.clamp(0.5, 1.25));
+    state = state.copyWith(
+      ttsRate: value.clamp(ttsRateOptions.first, ttsRateOptions.last),
+    );
     _persist();
   }
 

@@ -1,12 +1,196 @@
+import 'dart:async';
+
 import 'package:common_learn_english/features/settings/presentation/settings_provider.dart';
 import 'package:common_learn_english/features/settings/presentation/settings_screen.dart';
 import 'package:common_learn_english/features/settings/presentation/widgets/settings_group_card.dart';
+import 'package:common_learn_english/features/shared/data/word_pronunciation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod/src/framework.dart' show Override;
 
 void main() {
+  testWidgets(
+    'speech speed menu includes two, two-and-a-half, and three times',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1366, 1024);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final ProviderContainer container = ProviderContainer();
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: SettingsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final Finder dropdown = find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is DropdownButton<double> &&
+            (widget.items?.any(
+                  (DropdownMenuItem<double> item) => item.value == 3,
+                ) ??
+                false),
+      );
+      await tester.ensureVisible(dropdown);
+      await tester.pumpAndSettle();
+      final DropdownButton<double> control = tester
+          .widget<DropdownButton<double>>(dropdown);
+      expect(
+        control.items!.map((DropdownMenuItem<double> item) => item.value),
+        ttsRateOptions,
+      );
+      control.onChanged!(3);
+      await tester.pumpAndSettle();
+      expect(container.read(learningSettingsProvider).ttsRate, 3);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'voice preview uses current voice and rate, stops on selection and navigation',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1366, 1024);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final List<(String, String, double)> requests =
+          <(String, String, double)>[];
+      final List<Completer<void>> pending = <Completer<void>>[];
+      int stops = 0;
+      final ProviderContainer container = ProviderContainer(
+        overrides: <Override>[
+          ttsEngineSnapshotProvider.overrideWith(
+            (Ref ref) async => const TtsEngineSnapshot(
+              defaultEngine: '',
+              engines: <TtsEngineOption>[],
+            ),
+          ),
+          ttsVoiceSnapshotProvider('').overrideWith(
+            (Ref ref) async => const TtsVoiceSnapshot(
+              voices: <TtsVoiceOption>[
+                TtsVoiceOption(id: 'samantha', label: 'Samantha · en-US · 标准'),
+                TtsVoiceOption(id: 'daniel', label: 'Daniel · en-GB · 标准'),
+              ],
+            ),
+          ),
+          wordPronunciationServiceProvider.overrideWith((Ref ref) {
+            final LearningSettingsState settings = ref.watch(
+              learningSettingsProvider,
+            );
+            Completer<void>? active;
+            return WordPronunciationService(
+              speakOverride: (String text) {
+                requests.add((text, settings.ttsVoice, settings.ttsRate));
+                active = Completer<void>();
+                pending.add(active!);
+                return active!.future;
+              },
+              stopOverride: () async {
+                stops++;
+                if (active != null && !active!.isCompleted) active!.complete();
+              },
+            );
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: SettingsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final Finder button = find.byKey(const Key('tts-voice-preview'));
+      await tester.ensureVisible(button);
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pump();
+      expect(requests.single, (
+        'Hello! I have three projects to finish today.',
+        '',
+        0.75,
+      ));
+      expect(find.text('停止'), findsOneWidget);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(stops, 1);
+      expect(find.text('试听'), findsOneWidget);
+      container.read(learningSettingsProvider.notifier).setTtsVoice('samantha');
+      container.read(learningSettingsProvider.notifier).setTtsRate(1);
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pump();
+      expect(requests.last.$2, 'samantha');
+      expect(requests.last.$3, 1.0);
+      container.read(learningSettingsProvider.notifier).setTtsVoice('daniel');
+      await tester.pumpAndSettle();
+      expect(stops, 2);
+      expect(find.text('试听'), findsOneWidget);
+      await tester.tap(button);
+      await tester.pump();
+      expect(requests.last.$2, 'daniel');
+      container.read(learningSettingsProvider.notifier).setTtsRate(0.5);
+      await tester.pumpAndSettle();
+      expect(stops, 3);
+      expect(find.text('试听'), findsOneWidget);
+      await tester.tap(button);
+      await tester.pump();
+      expect(requests.last.$3, 0.5);
+      pending.last.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('试听'), findsOneWidget);
+      await tester.tap(button);
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      expect(stops, 4);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('voice preview reports a failure and can be retried', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          ttsEngineSnapshotProvider.overrideWith(
+            (Ref ref) async => const TtsEngineSnapshot(
+              defaultEngine: '',
+              engines: <TtsEngineOption>[],
+            ),
+          ),
+          ttsVoiceSnapshotProvider('').overrideWith(
+            (Ref ref) async =>
+                const TtsVoiceSnapshot(voices: <TtsVoiceOption>[]),
+          ),
+          wordPronunciationServiceProvider.overrideWithValue(
+            WordPronunciationService(
+              speakOverride: (_) async {
+                throw const WordPronunciationException();
+              },
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: SettingsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final Finder button = find.byKey(const Key('tts-voice-preview'));
+    await tester.ensureVisible(button);
+    await tester.pumpAndSettle();
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(find.text('试听失败，请检查设备是否已安装所选英语音色。'), findsOneWidget);
+    expect(tester.widget<OutlinedButton>(button).onPressed, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('subtitle letter case can be changed from playback settings', (
     WidgetTester tester,
   ) async {

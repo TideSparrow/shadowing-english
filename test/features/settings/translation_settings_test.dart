@@ -230,6 +230,27 @@ void main() {
     expect(state.subtitleWordHighlightBorderWidth, 3.5);
   });
 
+  test(
+    'all speech speed options are accepted and unsupported bounds are clamped',
+    () async {
+      final ProviderContainer container = ProviderContainer();
+      addTearDown(container.dispose);
+      final LearningSettingsNotifier notifier = container.read(
+        learningSettingsProvider.notifier,
+      );
+      expect(ttsRateOptions, <double>[0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3]);
+      for (final double rate in ttsRateOptions) {
+        notifier.setTtsRate(rate);
+        expect(container.read(learningSettingsProvider).ttsRate, rate);
+      }
+      notifier.setTtsRate(10);
+      expect(container.read(learningSettingsProvider).ttsRate, 3);
+      notifier.setTtsRate(0.1);
+      expect(container.read(learningSettingsProvider).ttsRate, 0.5);
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
+
   test('TTS voice settings persist across provider rebuilds', () async {
     final ProviderContainer first = ProviderContainer();
     addTearDown(first.dispose);
@@ -238,7 +259,7 @@ void main() {
         .read(learningSettingsProvider.notifier)
         .setTtsEngine('com.example.tts');
     first.read(learningSettingsProvider.notifier).setTtsVoice('en-us-female');
-    first.read(learningSettingsProvider.notifier).setTtsRate(1.25);
+    first.read(learningSettingsProvider.notifier).setTtsRate(3);
 
     await Future<void>.delayed(Duration.zero);
 
@@ -248,7 +269,7 @@ void main() {
     final LearningSettingsState state = second.read(learningSettingsProvider);
     expect(state.ttsEngine, 'com.example.tts');
     expect(state.ttsVoice, 'en-us-female');
-    expect(state.ttsRate, 1.25);
+    expect(state.ttsRate, 3);
   });
 
   test('ASR settings persist across provider rebuilds', () async {

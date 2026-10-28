@@ -119,7 +119,11 @@ class _PadSidebarState extends ConsumerState<PadSidebar> {
     final double windowControlsInset =
         defaultTargetPlatform == TargetPlatform.macOS ? 28 : 0;
     final List<AppNavDestination> items = AppNavDestination.values
-        .where((AppNavDestination destination) => destination.showInNav)
+        .where(
+          (AppNavDestination destination) =>
+              destination.showInNav &&
+              destination != AppNavDestination.settings,
+        )
         .toList(growable: false);
 
     return Container(
@@ -293,7 +297,7 @@ class _PadSidebarState extends ConsumerState<PadSidebar> {
                         compact ? 62 : 70,
                         12,
                         compact ? 18 : 22,
-                        24,
+                        52,
                       ),
                       child: Row(
                         children: <Widget>[
@@ -355,6 +359,31 @@ class _PadSidebarState extends ConsumerState<PadSidebar> {
                 ),
               ),
             ],
+          ),
+          Positioned(
+            right: 12,
+            bottom: 8,
+            child: IconButton(
+              key: const Key('pad-sidebar-settings-entry'),
+              tooltip: '设置',
+              isSelected: widget.current == AppNavDestination.settings,
+              onPressed: () {
+                if (widget.current != AppNavDestination.settings) {
+                  context.go(AppNavDestination.settings.route);
+                }
+              },
+              icon: const Icon(Icons.settings_outlined, size: 22),
+              selectedIcon: const Icon(Icons.settings_rounded, size: 22),
+              style: IconButton.styleFrom(
+                minimumSize: const Size(40, 40),
+                foregroundColor: widget.current == AppNavDestination.settings
+                    ? AppDesignTokens.brandGreenDark
+                    : AppDesignTokens.textSecondary,
+                backgroundColor: widget.current == AppNavDestination.settings
+                    ? AppDesignTokens.brandGreen.withValues(alpha: 0.12)
+                    : Colors.transparent,
+              ),
+            ),
           ),
         ],
       ),

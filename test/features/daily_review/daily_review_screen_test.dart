@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:common_learn_english/features/daily_review/domain/daily_review.dart';
 import 'package:common_learn_english/features/daily_review/presentation/daily_review_provider.dart';
 import 'package:common_learn_english/features/daily_review/presentation/daily_review_screen.dart';
 import 'package:common_learn_english/features/navigation/presentation/navigation_destination.dart';
+import 'package:common_learn_english/features/settings/presentation/settings_provider.dart';
+import 'package:common_learn_english/features/shared/data/word_pronunciation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -61,6 +64,118 @@ Widget app(ProviderContainer container, {bool session = false}) {
 }
 
 void main() {
+  const String original = "AND I CAN'T AFFORD THESE PROJECTS.";
+  const List<ReviewSource> uppercaseSources = <ReviewSource>[
+    ReviewSource(
+      key: 'word:afford',
+      kind: ReviewKind.word,
+      question: 'afford',
+      answer: '买得起 API',
+      english: original,
+      chinese: '中文翻译 API',
+      sourceLabel: '课程',
+    ),
+    ReviewSource(
+      key: 'phrase:uppercase',
+      kind: ReviewKind.phrase,
+      question: '中文短语 API',
+      answer: original,
+      english: original,
+      chinese: '中文短语 API',
+      sourceLabel: '课程',
+    ),
+  ];
+  for (final MapEntry<String, String> mode in <String, String>{
+    '保留原样': original,
+    '全部大写': original,
+    '全部小写': "and i can't afford these projects.",
+    '句首字母大写': "And I can't afford these projects.",
+  }.entries) {
+    testWidgets('word examples and phrase answers follow ${mode.key}', (
+      WidgetTester tester,
+    ) async {
+      final ProviderContainer container = makeContainer(uppercaseSources);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(app(container, session: true));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('daily-review-reveal')));
+      await tester.tap(find.byKey(const Key('daily-review-reveal')));
+      await tester.pumpAndSettle();
+      // Changing the setting updates an already revealed, previously saved card.
+      container
+          .read(learningSettingsProvider.notifier)
+          .setSubtitleLetterCase(mode.key);
+      await tester.pumpAndSettle();
+      expect(find.text(mode.value), findsOneWidget);
+      expect(find.text('买得起 API'), findsOneWidget);
+      expect(find.text('中文翻译 API'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('daily-review-next')));
+      await tester.pumpAndSettle();
+      expect(find.text(mode.value), findsNothing);
+      await tester.ensureVisible(find.byKey(const Key('daily-review-reveal')));
+      await tester.tap(find.byKey(const Key('daily-review-reveal')));
+      await tester.pumpAndSettle();
+      expect(find.text(mode.value), findsOneWidget);
+      expect(uppercaseSources.first.english, original);
+      expect(uppercaseSources.last.answer, original);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  testWidgets('speech remains locked until completion and stops when grading', (
+    WidgetTester tester,
+  ) async {
+    final Completer<void> spoken = Completer<void>();
+    final List<String> texts = <String>[];
+    int stops = 0;
+    final ProviderContainer container = ProviderContainer(
+      // ignore: always_specify_types
+      overrides: [
+        reviewSourcesProvider.overrideWithValue(sources),
+        reviewClockProvider.overrideWithValue(() => DateTime(2026, 10, 23, 9)),
+        wordPronunciationServiceProvider.overrideWithValue(
+          WordPronunciationService(
+            speakOverride: (String text) {
+              texts.add(text);
+              return spoken.future;
+            },
+            stopOverride: () async {
+              stops++;
+              spoken.complete();
+            },
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(app(container, session: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('听原句'));
+    await tester.pump();
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byWidgetPredicate(
+              (Widget widget) =>
+                  widget is IconButton && widget.tooltip == '正在朗读',
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(texts, <String>[sources.first.english]);
+    await tester.ensureVisible(find.byKey(const Key('daily-review-reveal')));
+    await tester.tap(find.byKey(const Key('daily-review-reveal')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('daily-review-rate-good')));
+    await tester.tap(find.byKey(const Key('daily-review-rate-good')));
+    await tester.pumpAndSettle();
+    expect(stops, 1);
+    expect(find.byTooltip('听原句'), findsOneWidget);
+    expect(find.text('很高兴见到你。'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   test('navigation places review between growth and phrases', () {
     const List<AppNavDestination> nav = AppNavDestination.values;
     expect(

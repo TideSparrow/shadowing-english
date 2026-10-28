@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -206,7 +208,9 @@ class SettingsScreen extends ConsumerWidget {
                 },
               ),
               _TtsVoiceRow(
+                selectedEngine: settings.ttsEngine,
                 selectedVoice: settings.ttsVoice,
+                selectedRate: settings.ttsRate,
                 snapshot: ttsVoices.value,
                 isLoading: ttsVoices.isLoading,
                 onChanged: (String? value) {
@@ -881,73 +885,174 @@ class _TtsEngineRow extends StatelessWidget {
   }
 }
 
-class _TtsVoiceRow extends StatelessWidget {
+class _TtsVoiceRow extends ConsumerStatefulWidget {
   const _TtsVoiceRow({
+    required this.selectedEngine,
     required this.selectedVoice,
+    required this.selectedRate,
     required this.snapshot,
     required this.isLoading,
     required this.onChanged,
   });
 
+  final String selectedEngine;
   final String selectedVoice;
+  final double selectedRate;
   final TtsVoiceSnapshot? snapshot;
   final bool isLoading;
   final ValueChanged<String?> onChanged;
 
   @override
+  ConsumerState<_TtsVoiceRow> createState() => _TtsVoiceRowState();
+}
+
+class _TtsVoiceRowState extends ConsumerState<_TtsVoiceRow> {
+  bool _previewing = false;
+  int _previewVersion = 0;
+  WordPronunciationService? _speech;
+
+  @override
+  void didUpdateWidget(covariant _TtsVoiceRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedVoice != widget.selectedVoice ||
+        oldWidget.selectedEngine != widget.selectedEngine ||
+        oldWidget.selectedRate != widget.selectedRate) {
+      unawaited(_stopPreview());
+    }
+  }
+
+  Future<void> _stopPreview() async {
+    _previewVersion++;
+    final WordPronunciationService? speech = _speech;
+    _speech = null;
+    if (mounted && _previewing) setState(() => _previewing = false);
+    try {
+      await speech?.stop();
+    } catch (_) {
+      // Cancelling a preview does not need an error message.
+    }
+  }
+
+  Future<void> _preview() async {
+    if (_previewing) return;
+    final int version = ++_previewVersion;
+    setState(() => _previewing = true);
+    try {
+      _speech = ref.read(wordPronunciationServiceProvider);
+      await _speech!.speak('Hello! I have three projects to finish today.');
+    } catch (_) {
+      if (mounted && version == _previewVersion) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('试听失败，请检查设备是否已安装所选英语音色。')));
+      }
+    } finally {
+      if (mounted && version == _previewVersion) {
+        _speech = null;
+        setState(() => _previewing = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _previewing = false;
+    unawaited(_stopPreview());
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final List<TtsVoiceOption> voices =
-        snapshot?.voices ?? const <TtsVoiceOption>[];
+        widget.snapshot?.voices ?? const <TtsVoiceOption>[];
     final bool hasSelected = voices.any(
-      (TtsVoiceOption voice) => voice.id == selectedVoice,
+      (TtsVoiceOption voice) => voice.id == widget.selectedVoice,
     );
-    final String value = hasSelected ? selectedVoice : '';
-
-    return _SettingsRowFrame(
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: _TitleBlock(
-              title: '英语朗读音色',
-              description: isLoading
-                  ? '正在读取当前引擎的英语音色。'
-                  : '可选已安装的英语音色；自动选择会优先使用高质量音色。',
+    final String value = hasSelected ? widget.selectedVoice : '';
+    final Widget title = _TitleBlock(
+      title: '英语朗读音色',
+      description: widget.isLoading ? '正在读取当前引擎的英语音色。' : '选择后可试听，使用下方设置的朗读速度。',
+    );
+    final Widget dropdown = DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFB9CDBE)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: value,
+            isExpanded: true,
+            borderRadius: BorderRadius.circular(16),
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Color(0xFF53625A),
             ),
-          ),
-          const SizedBox(width: 16),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFB9CDBE)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: value,
-                  borderRadius: BorderRadius.circular(16),
-                  icon: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: Color(0xFF53625A),
-                  ),
-                  items: <DropdownMenuItem<String>>[
-                    const DropdownMenuItem<String>(
-                      value: '',
-                      child: Text('自动选择（优先高质量）'),
-                    ),
-                    for (final TtsVoiceOption voice in voices)
-                      DropdownMenuItem<String>(
-                        value: voice.id,
-                        child: Text(voice.label),
-                      ),
-                  ],
-                  onChanged: isLoading ? null : onChanged,
-                ),
+            items: <DropdownMenuItem<String>>[
+              const DropdownMenuItem<String>(
+                value: '',
+                child: Text('自动选择（优先高质量）'),
               ),
-            ),
+              for (final TtsVoiceOption voice in voices)
+                DropdownMenuItem<String>(
+                  value: voice.id,
+                  child: Text(
+                    voice.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: widget.isLoading ? null : widget.onChanged,
           ),
-        ],
+        ),
+      ),
+    );
+    final Widget preview = OutlinedButton.icon(
+      key: const Key('tts-voice-preview'),
+      onPressed: widget.isLoading
+          ? null
+          : _previewing
+          ? _stopPreview
+          : _preview,
+      icon: Icon(
+        _previewing ? Icons.stop_rounded : Icons.volume_up_outlined,
+        size: 18,
+      ),
+      label: Text(_previewing ? '停止' : '试听'),
+      style: OutlinedButton.styleFrom(minimumSize: const Size(88, 48)),
+    );
+    return _SettingsRowFrame(
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          if (constraints.maxWidth < 720) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                title,
+                const SizedBox(height: 10),
+                Row(
+                  children: <Widget>[
+                    Expanded(child: dropdown),
+                    const SizedBox(width: 8),
+                    preview,
+                  ],
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: <Widget>[
+              Expanded(child: title),
+              const SizedBox(width: 16),
+              SizedBox(width: 330, child: dropdown),
+              const SizedBox(width: 8),
+              preview,
+            ],
+          );
+        },
       ),
     );
   }
@@ -1024,7 +1129,7 @@ class _TtsRateRow extends StatelessWidget {
   final double value;
   final ValueChanged<double> onChanged;
 
-  static const List<double> _rates = <double>[0.5, 0.75, 1, 1.25];
+  static const List<double> _rates = ttsRateOptions;
 
   @override
   Widget build(BuildContext context) {
