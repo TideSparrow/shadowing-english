@@ -28,6 +28,7 @@ import 'full_transcript_reader.dart';
 import 'learning_resume_provider.dart';
 import 'player_course_lookup.dart';
 import 'player_fullscreen_video_screen.dart';
+import 'player_graphics_cache.dart';
 import 'player_media_source.dart';
 import 'player_mock_state.dart';
 import 'player_native_subtitles.dart';
@@ -68,12 +69,15 @@ class _PadPortraitPlayerScreenState
       TranscriptReaderSession();
   Player? _videoPlayer;
   VideoController? _videoController;
+  Future<void>? _videoDisposal;
+  late final Future<void> Function() _releaseGraphicsCache;
   StreamSubscription<Duration>? _videoPositionSubscription;
   StreamSubscription<Duration>? _videoDurationSubscription;
   StreamSubscription<bool>? _videoPlayingSubscription;
   StreamSubscription<bool>? _videoCompletedSubscription;
   StreamSubscription<int?>? _videoWidthSubscription;
   StreamSubscription<int?>? _videoHeightSubscription;
+  StreamSubscription<Tracks>? _videoTracksSubscription;
   bool _isMuted = false;
   double _volumeLevel = 1;
   bool _videoReady = false;
@@ -103,6 +107,7 @@ class _PadPortraitPlayerScreenState
   @override
   void initState() {
     super.initState();
+    _releaseGraphicsCache = PlayerGraphicsCache.acquire();
     state = PlayerMockState(initialStartTime: widget.initialStartTime);
     _syncSettingsToState(ref.read(learningSettingsProvider));
     ref.listenManual<String>(
@@ -132,8 +137,7 @@ class _PadPortraitPlayerScreenState
   void dispose() {
     _aiSubtitleCancellationToken?.cancel();
     PlayerSystemMediaControls.unbind();
-    _cancelVideoSubscriptions();
-    unawaited(_videoPlayer?.dispose());
+    unawaited(_disposeVideo().whenComplete(_releaseGraphicsCache));
     _transcriptReaderSession.dispose();
     super.dispose();
   }
@@ -199,6 +203,7 @@ class _PadPortraitPlayerScreenState
 
   Future<void> _initVideo() async {
     await _disposeVideo();
+    if (!mounted) return;
 
     if (_videoAsset == null || _videoAsset!.isEmpty) {
       setState(() {
@@ -219,30 +224,30 @@ class _PadPortraitPlayerScreenState
     });
 
     final Player player = Player();
-    final VideoController controller = VideoController(
-      player,
-      configuration: VideoControllerConfiguration(
-        enableHardwareAcceleration:
-            defaultTargetPlatform != TargetPlatform.macOS,
-      ),
-    );
+    // Own the player before opening media so leaving during initialization
+    // also releases its decoder and native video output.
+    _videoPlayer = player;
     final int initialPositionMs = state.positionMs;
 
     try {
+      final VideoController controller = VideoController(
+        player,
+        configuration: VideoControllerConfiguration(
+          enableHardwareAcceleration:
+              defaultTargetPlatform != TargetPlatform.macOS,
+        ),
+      );
+      _videoController = controller;
       await waitForVideoInitialization(() async {
         await player.open(Media(createPlayerMediaUri(_videoAsset!)));
       });
+      if (!mounted || !identical(_videoPlayer, player)) return;
       await waitForPlayerReady(player);
-      final List<SubtitleTrack> embeddedTracks = embeddedSubtitleTracks(
-        player.state.tracks.subtitle,
-      );
+      if (!mounted || !identical(_videoPlayer, player)) return;
       await player.setSubtitleTrack(SubtitleTrack.no());
       await player.setRate(state.playbackRate);
       await player.setVolume(_volumeLevel * 100);
-      if (!mounted) {
-        await player.dispose();
-        return;
-      }
+      if (!mounted || !identical(_videoPlayer, player)) return;
 
       _videoDuration = player.state.duration;
       _videoPosition = player.state.position;
@@ -252,10 +257,11 @@ class _PadPortraitPlayerScreenState
       }
       await player.pause();
       _videoPosition = player.state.position;
+      if (!mounted || !identical(_videoPlayer, player)) return;
       _attachVideoListeners(player);
-
-      _videoPlayer = player;
-      _videoController = controller;
+      final List<SubtitleTrack> embeddedTracks = embeddedSubtitleTracks(
+        player.state.tracks.subtitle,
+      );
       setState(() {
         _embeddedSubtitleTracks = embeddedTracks;
         _selectedEmbeddedSubtitleId = null;
@@ -275,8 +281,7 @@ class _PadPortraitPlayerScreenState
       if (!mounted) return;
       _applyPlaybackMode();
     } catch (_) {
-      _cancelVideoSubscriptions();
-      await player.dispose();
+      if (identical(_videoPlayer, player)) await _disposeVideo();
       if (!mounted) {
         return;
       }
@@ -350,6 +355,7 @@ class _PadPortraitPlayerScreenState
   Future<void> _disposeVideo() async {
     _cancelVideoSubscriptions();
     if (_videoPlayer == null) {
+      await _videoDisposal;
       return;
     }
 
@@ -357,14 +363,32 @@ class _PadPortraitPlayerScreenState
     _videoPlayer = null;
     _videoController = null;
     _videoIsPlaying = false;
-    try {
-      await player.dispose();
-    } catch (_) {
-      // Ignore cleanup failures, disposal is best effort.
-    }
+    _videoDisposal = () async {
+      try {
+        await player.dispose();
+      } catch (_) {
+        // Ignore cleanup failures, disposal is best effort.
+      }
+    }();
+    await _videoDisposal;
   }
 
   void _attachVideoListeners(Player player) {
+    _videoTracksSubscription = player.stream.tracks.listen((Tracks tracks) {
+      if (!mounted || !identical(_videoPlayer, player)) return;
+      final List<SubtitleTrack> subtitles = embeddedSubtitleTracks(
+        tracks.subtitle,
+      );
+      if (listEquals(_embeddedSubtitleTracks, subtitles)) return;
+      setState(() {
+        _embeddedSubtitleTracks = subtitles;
+        if (!subtitles.any(
+          (SubtitleTrack track) => track.id == _selectedEmbeddedSubtitleId,
+        )) {
+          _selectedEmbeddedSubtitleId = null;
+        }
+      });
+    });
     _videoPositionSubscription = player.stream.position.listen(
       _onVideoProgress,
     );
@@ -404,12 +428,14 @@ class _PadPortraitPlayerScreenState
     unawaited(_videoCompletedSubscription?.cancel());
     unawaited(_videoWidthSubscription?.cancel());
     unawaited(_videoHeightSubscription?.cancel());
+    unawaited(_videoTracksSubscription?.cancel());
     _videoPositionSubscription = null;
     _videoDurationSubscription = null;
     _videoPlayingSubscription = null;
     _videoCompletedSubscription = null;
     _videoWidthSubscription = null;
     _videoHeightSubscription = null;
+    _videoTracksSubscription = null;
   }
 
   void _syncVideoAspectRatio(int? width, int? height) {
@@ -759,6 +785,11 @@ class _PadPortraitPlayerScreenState
                         currentWordIndex: state.currentWordIndex,
                         highlightWords: settings.highlightWords,
                         subtitleLetterCase: settings.subtitleLetterCase,
+                        fontSize: settings.fontSize,
+                        fontScale: settings.fontScale,
+                        onSelectFontSize: ref
+                            .read(learningSettingsProvider.notifier)
+                            .setFontSize,
                         subtitleWordHighlightStyle:
                             settings.subtitleWordHighlightStyle,
                         subtitleWordHighlightBorderWidth:
@@ -779,9 +810,11 @@ class _PadPortraitPlayerScreenState
                         onSeek: _handleSeek,
                         onSpeedSelected: _handleSpeedSelected,
                         onSelectSubtitleMode: _handleSetSubtitleMode,
-                        onSelectSubtitleLetterCase: ref
-                            .read(learningSettingsProvider.notifier)
-                            .setSubtitleLetterCase,
+                        onSelectSubtitleLetterCase: _usingAiSubtitles
+                            ? ref
+                                  .read(learningSettingsProvider.notifier)
+                                  .setSubtitleLetterCase
+                            : null,
                         onSelectEmbeddedSubtitle: _handleSelectEmbeddedSubtitle,
                         onToggleShadowing: _handleToggleShadowing,
                         onToggleLoop: _handleToggleLoop,
@@ -1505,9 +1538,11 @@ class _PadPortraitPlayerScreenState
             onSeek: _handleSeek,
             onSpeedSelected: _handleSpeedSelected,
             onSelectSubtitleMode: _handleSetSubtitleMode,
-            onSelectSubtitleLetterCase: ref
-                .read(learningSettingsProvider.notifier)
-                .setSubtitleLetterCase,
+            onSelectSubtitleLetterCase: _usingAiSubtitles
+                ? ref
+                      .read(learningSettingsProvider.notifier)
+                      .setSubtitleLetterCase
+                : null,
             embeddedSubtitleTracks: _embeddedSubtitleTracks,
             selectedEmbeddedSubtitleId: _selectedEmbeddedSubtitleId,
             onSelectEmbeddedSubtitle: _handleSelectEmbeddedSubtitle,
@@ -1530,6 +1565,10 @@ class _PadPortraitPlayerScreenState
                 ? _handleRegenerateAiLine
                 : null,
             fontScale: ref.read(learningSettingsProvider).fontScale,
+            fontSize: ref.read(learningSettingsProvider).fontSize,
+            onSelectFontSize: ref
+                .read(learningSettingsProvider.notifier)
+                .setFontSize,
             episodes: episodes,
             activeEpisodeId: widget.episodeId,
             onExit: () => Navigator.of(context).maybePop(),
@@ -1584,11 +1623,26 @@ class _PadPortraitPlayerScreenState
     if (controller == null) {
       return null;
     }
-    return Video(
-      controller: controller,
-      controls: null,
-      pauseUponEnteringBackgroundMode: false,
-      filterQuality: FilterQuality.medium,
+    return Consumer(
+      builder: (BuildContext context, WidgetRef ref, _) {
+        final double fontScale = ref.watch(
+          learningSettingsProvider.select(
+            (LearningSettingsState settings) => settings.fontScale,
+          ),
+        );
+        const SubtitleViewConfiguration defaults = SubtitleViewConfiguration();
+        return Video(
+          controller: controller,
+          controls: null,
+          subtitleViewConfiguration: SubtitleViewConfiguration(
+            style: defaults.style.copyWith(
+              fontSize: defaults.style.fontSize! * fontScale,
+            ),
+          ),
+          pauseUponEnteringBackgroundMode: false,
+          filterQuality: FilterQuality.medium,
+        );
+      },
     );
   }
 }

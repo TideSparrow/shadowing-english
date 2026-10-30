@@ -25,6 +25,22 @@ void main() {
     hiveDir.deleteSync(recursive: true);
   });
 
+
+  test('expanded subtitle sizes persist and keep legacy scales', () async {
+    final ProviderContainer container = ProviderContainer();
+    addTearDown(container.dispose);
+    final LearningSettingsNotifier settings = container.read(learningSettingsProvider.notifier)..setFontSize('大');
+    expect(container.read(learningSettingsProvider).fontScale, 1.18);
+    settings
+      ..setFontSize('最大')
+      ..setFontSize('invalid');
+    await Hive.box<String>('prefs').flush();
+    final ProviderContainer restored = ProviderContainer();
+    addTearDown(restored.dispose);
+    expect(restored.read(learningSettingsProvider).fontSize, '最大');
+    expect(restored.read(learningSettingsProvider).fontScale, 2);
+  });
+
   test(
     'subtitle letter case persists, rejects invalid values, and resets',
     () async {

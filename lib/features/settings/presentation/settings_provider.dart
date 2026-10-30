@@ -21,7 +21,24 @@ const List<double> ttsRateOptions = <double>[
   3,
 ];
 
-const List<String> playerFontOptions = <String>['小', '中', '大'];
+const List<String> playerFontOptions = <String>[
+  '特小',
+  '小',
+  '中',
+  '大',
+  '特大',
+  '超大',
+  '最大',
+];
+const Map<String, double> playerFontScales = <String, double>{
+  '特小': 0.75,
+  '小': 0.92,
+  '中': 1,
+  '大': 1.18,
+  '特大': 1.4,
+  '超大': 1.7,
+  '最大': 2,
+};
 const List<String> subtitleWordHighlightStyleOptions = <String>[
   '绿色填充',
   '黄色填充',
@@ -277,16 +294,7 @@ class LearningSettingsState {
     );
   }
 
-  double get fontScale {
-    switch (fontSize) {
-      case '小':
-        return 0.92;
-      case '大':
-        return 1.18;
-      default:
-        return 1;
-    }
-  }
+  double get fontScale => playerFontScales[fontSize] ?? 1;
 }
 
 final NotifierProvider<LearningSettingsNotifier, LearningSettingsState>

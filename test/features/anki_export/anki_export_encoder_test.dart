@@ -209,14 +209,30 @@ void main() {
     );
     final Map<String, dynamic> template =
         (model['tmpls'] as List<dynamic>).single as Map<String, dynamic>;
-    expect(template['qfmt'], contains('{{Kind}}'));
+    // Some mobile clients read the whole card rather than its TTS field.
+    // Keep the type in note data, without a spoken "Word/Phrase" heading.
+    expect(template['qfmt'], isNot(contains('{{Kind}}')));
+    expect(template['afmt'], isNot(contains('{{Kind}}')));
     expect(template['qfmt'], contains('{{Expression}}'));
     expect(template['qfmt'], contains('{{Phonetic}}'));
-    expect(template['afmt'], contains('{{FrontSide}}'));
+    for (final String side in <String>['qfmt', 'afmt']) {
+      final String content = template[side] as String;
+      expect('{{tts en_US:Expression}}'.allMatches(content), hasLength(1));
+      expect(content, contains('{{Expression}}'));
+    }
+    expect(template['afmt'], isNot(contains('{{FrontSide}}')));
     expect(template['afmt'], contains('{{Meaning}}'));
     expect(template['afmt'], contains('{{Context}}'));
     expect(template['afmt'], isNot(contains('{{Translation}}')));
-    expect(template['qfmt'], isNot(contains('<script')));
+    expect(template['qfmt'], contains('se-native-audio" hidden'));
+    expect(template['qfmt'], contains('aria-label="朗读英文" hidden'));
+    expect(template['qfmt'], contains('voice.localService'));
+    expect(
+      template['qfmt'],
+      contains("card.querySelector('.se-expression').textContent"),
+    );
+    expect(template['qfmt'], isNot(contains('<script src=')));
+    expect(template['qfmt'], isNot(contains('fetch(')));
 
     final AnkiExportNote changed = _sampleNote(
       expression: '<b>updated café 🐳</b>',

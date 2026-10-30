@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show compute, kIsWeb;
 
 import 'import_file_system.dart';
 
@@ -176,6 +176,24 @@ class ImportMatchRow {
 }
 
 class ImportMatcher {
+  static Future<List<ImportMatchRow>> parseInBackground({
+    required String videoFolder,
+    required String? subtitleFolder,
+    List<String>? videoFiles,
+    List<String>? subtitleFiles,
+  }) {
+    // Capture only paths and file lists, never widget state or platform handles.
+    return compute(
+      (_) => parse(
+        videoFolder: videoFolder,
+        subtitleFolder: subtitleFolder,
+        videoFiles: videoFiles,
+        subtitleFiles: subtitleFiles,
+      ),
+      null,
+    );
+  }
+
   static const Set<String> _videoExtensions = <String>{
     '.mp4',
     '.mkv',

@@ -83,6 +83,8 @@ Shadowing English 是一个 English shadowing app：你导入自己有权使用�
 
 相同表达会合并多条语境。`.apkg` 使用稳定标识，重复导入可更新原卡片；在 Anki 中选择更新现有笔记即可，已有复习进度会保留。取消收藏不会自动删除此前导入 Anki 的卡片。导出只读取本地内容，不包含音视频片段，也不会改变应用内的复习计划。
 
+`.apkg` 卡片正反面支持实时英文朗读，不打包音频文件。官方 Anki 使用原生朗读；允许卡片脚本且提供 Web Speech API 的网页客户端显示“朗读”按钮，使用设备上的本地英语语音，不调用外部语音 API。客户端禁用脚本或设备缺少英语语音时会无法朗读，不应出现原始朗读指令。官方原生朗读需要 Anki 2.1.20+、AnkiMobile 2.0.56+ 或 AnkiDroid 2.17+；Linux 需配置可用的 TTS 插件。旧牌组需重新导出、导入，并允许更新卡片模板。
+
 CSV／TSV 均为普通纯文本表格，首行为相同的中文表头：英文、音标、释义、原句语境、原句翻译、来源、时间点、类型，不包含 Anki 配置行。两种格式保留原句换行，采用带 BOM 的 UTF-8 编码，方便表格软件识别中文；CSV 使用逗号分隔，TSV 使用制表符分隔。
 
 ## 字幕功能：从导入到逐词跟读
@@ -154,7 +156,7 @@ AI 识别仍可能受到背景音乐、多人重叠说话、口音和录音质�
 
 ### 从源码运行
 
-需要 Flutter 3.44.4；仓库通过 FVM 固定版本。首次使用请先安装 [FVM](https://fvm.app/documentation/getting-started/installation)。
+需要 Flutter 3.44.4；FVM 和 VS Code 都是可选工具。推荐通过 FVM 固定版本，使用前先安装 [FVM](https://fvm.app/documentation/getting-started/installation)。
 
 ```bash
 git clone https://github.com/TideSparrow/shadowing-english.git
@@ -172,6 +174,8 @@ fvm flutter run
 flutter pub get
 flutter run
 ```
+
+不使用 VS Code 时，在终端执行 `flutter devices`，再执行 `flutter run -d <device-id>`。环境检查、目录结构和修改入口见 [参与开发指南](CONTRIBUTING.md)。
 
 ## 导入学习素材
 

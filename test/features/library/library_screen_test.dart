@@ -70,6 +70,60 @@ void main() {
     return buildRouterWithScreen(const LibraryScreen());
   }
 
+  for (final double width in <double>[320, 390]) {
+    testWidgets('phone detail keeps episode actions usable at width $width', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      bool openedTranscript = false;
+      final GoRouter router = buildRouterWithScreen(
+        LibraryScreen(
+          initialView: LibraryScreenView.detail,
+          initialCourseId: _testCourse.id,
+          openTranscriptReader:
+              (LibraryCourseData course, LibraryEpisodeItem episode) async {
+                openedTranscript = true;
+              },
+        ),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          // ignore: always_specify_types
+          overrides: [
+            libraryCatalogProvider.overrideWith(
+              _TestLibraryCatalogNotifier.new,
+            ),
+          ],
+          child: MaterialApp.router(
+            routerConfig: router,
+            builder: (BuildContext context, Widget? child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.3)),
+              child: child!,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final Finder button = find.byKey(
+        const ValueKey<String>('episode-view-transcript-custom-course-ep01'),
+      );
+      await tester.scrollUntilVisible(
+        button,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
+      expect(tester.takeException(), isNull);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(openedTranscript, isTrue);
+    });
+  }
+
   testWidgets('library list shows empty state when no built-in courses remain', (
     WidgetTester tester,
   ) async {

@@ -61,8 +61,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '开始解析'));
     await tester.pump();
     expect(find.text('正在分析视频和字幕...'), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 700));
-    await tester.pumpAndSettle();
+    await _waitForParsing(tester);
 
     expect(find.textContaining('智能解析匹配剧集'), findsWidgets);
     expect(find.byTooltip('返回上一步'), findsOneWidget);
@@ -110,8 +109,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '选择字幕文件夹'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '开始解析'));
-    await tester.pump(const Duration(milliseconds: 700));
-    await tester.pumpAndSettle();
+    await _waitForParsing(tester);
 
     await tester.tap(find.widgetWithText(FilledButton, '确认导入并建立课程'));
     await tester.pump();
@@ -167,11 +165,25 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '选择字幕文件夹'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '开始解析'));
-    await tester.pump(const Duration(milliseconds: 700));
-    await tester.pumpAndSettle();
+    await _waitForParsing(tester);
     await tester.tap(find.widgetWithText(FilledButton, '确认导入并建立课程'));
     await tester.pumpAndSettle();
 
     expect(container.read(libraryCatalogProvider).first.title, 'Friends');
   });
+}
+
+// Background file scanning runs on a real isolate, outside the widget fake clock.
+Future<void> _waitForParsing(WidgetTester tester) async {
+  final Stopwatch timeout = Stopwatch()..start();
+  while (find.textContaining('智能解析匹配剧集').evaluate().isEmpty) {
+    if (timeout.elapsed > const Duration(seconds: 10)) {
+      fail('Background import parsing did not complete');
+    }
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+  }
+  await tester.pumpAndSettle();
 }

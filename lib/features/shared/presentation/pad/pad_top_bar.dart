@@ -39,10 +39,18 @@ class PadTopBar extends ConsumerWidget {
     final bool compact = width < 1180;
 
     final bool hasDescription = description != null;
+    final double contentHeight = hasDescription
+        ? (compact ? 88 : 96)
+        : subtitle != null
+        ? (compact ? 72 : 80)
+        : (compact ? 64 : 72);
 
     return Container(
       height:
-          (hasDescription ? (compact ? 88 : 96) : (compact ? 64 : 72)) +
+          contentHeight *
+              MediaQuery.textScalerOf(
+                context,
+              ).scale(1).clamp(1.0, double.infinity) +
           topInset +
           windowControlsInset,
       padding: EdgeInsets.fromLTRB(
@@ -77,6 +85,8 @@ class PadTopBar extends ConsumerWidget {
                       ),
                       child: Text(
                         subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w800,

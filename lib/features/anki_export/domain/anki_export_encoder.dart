@@ -496,22 +496,91 @@ class AnkiExportEncoder {
     return Uint8List.fromList(ZipEncoder().encode(archive));
   }
 
-  static const String _questionTemplate = '''
+  static const String _questionTemplate =
+      '''
 <div class="se-card">
-  <div class="se-kind">{{Kind}}</div>
   <div class="se-expression">{{Expression}}</div>
   {{#Phonetic}}<div class="se-phonetic">{{Phonetic}}</div>{{/Phonetic}}
+  <div class="se-audio se-native-audio" hidden>{{tts en_US:Expression}}</div>
+  <button type="button" class="se-browser-audio" aria-label="朗读英文" hidden>▶ 朗读</button>
+  <div class="se-speech-status" role="status" hidden></div>
 </div>
+$_speechScript
 ''';
 
-  static const String _answerTemplate = '''
-{{FrontSide}}
+  // FrontSide does not replay front-side audio on the answer. Render the same
+  // header explicitly so each side has its own native TTS replay control.
+  static const String _answerTemplate =
+      '''
+$_questionTemplate
 <hr id="answer">
 <div class="se-card se-answer">
   <div class="se-section-label">Meaning</div>
   <div class="se-meaning">{{Meaning}}</div>
   <div class="se-context">{{Context}}</div>
 </div>
+''';
+
+  // Only fixed code belongs in this script. Card text is read from the DOM,
+  // never interpolated into JavaScript or sent to an external speech service.
+  static const String _speechScript = '''
+<script>
+(function () {
+  document.querySelectorAll('.se-card').forEach(function (card) {
+    var nativeAudio = card.querySelector('.se-native-audio');
+    var button = card.querySelector('.se-browser-audio');
+    var status = card.querySelector('.se-speech-status');
+    if (!nativeAudio || !button || card.dataset.seSpeechReady) return;
+    card.dataset.seSpeechReady = 'true';
+    if (nativeAudio.querySelector('a, button, audio')) {
+      nativeAudio.hidden = false;
+      return;
+    }
+    function message(text) {
+      status.textContent = text;
+      status.hidden = !text;
+    }
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+      message('当前客户端不支持实时朗读。');
+      return;
+    }
+    var speech = window.speechSynthesis;
+    speech.getVoices();
+    button.hidden = false;
+    var active;
+    button.addEventListener('click', function () {
+      var text = card.querySelector('.se-expression').textContent.trim();
+      if (!text) return;
+      var voices = speech.getVoices().filter(function (voice) {
+        return voice.localService && /^en[-_]/i.test(voice.lang);
+      });
+      var voice = voices.find(function (item) {
+        return item.lang.replace('_', '-').toLowerCase() === 'en-us';
+      }) || voices[0];
+      if (!voice) {
+        message('请启用设备上的英语语音后重试。');
+        return;
+      }
+      var utterance = new SpeechSynthesisUtterance(text);
+      utterance.voice = voice;
+      utterance.lang = voice.lang;
+      utterance.rate = 1;
+      active = utterance;
+      utterance.onstart = function () {
+        if (active === utterance) message('正在朗读…');
+      };
+      utterance.onend = function () {
+        if (active === utterance) message('已朗读');
+      };
+      utterance.onerror = function () {
+        if (active === utterance) message('朗读失败，请检查设备英语语音。');
+      };
+      speech.cancel();
+      speech.speak(utterance);
+    });
+  });
+})();
+</script>
 ''';
 
   static const String _cardCss = '''
@@ -548,6 +617,21 @@ class AnkiExportEncoder {
   line-height: 1.2;
 }
 .se-phonetic { color: #7b8494; font-size: 16px; line-height: 1.5; }
+.se-card [hidden] { display: none !important; }
+.se-audio { margin-top: 12px; }
+.se-browser-audio {
+  margin-top: 12px;
+  padding: 8px 14px;
+  border: 1px solid #dce0e8;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.se-browser-audio:focus-visible { outline: 2px solid #0f7a43; outline-offset: 3px; }
+.se-speech-status { margin-top: 8px; font-size: 13px; color: #687286; }
+.se-audio .replay-button svg { width: 36px; height: 36px; }
 #answer { max-width: 720px; margin: 24px auto; border: 0; border-top: 1px solid #dce0e8; }
 .se-answer { line-height: 1.65; }
 .se-meaning { margin-top: 6px; font-size: 20px; line-height: 1.5; }

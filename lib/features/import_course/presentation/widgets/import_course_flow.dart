@@ -498,28 +498,29 @@ class _ImportCourseFlowState extends ConsumerState<ImportCourseFlow> {
     setState(() {
       parsing = true;
     });
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    final List<ImportMatchRow> rows = ImportMatcher.parse(
-      videoFolder: selectedVideoPath,
-      subtitleFolder: selectedSubtitlePath,
-      videoFiles: selectedVideoFiles.isEmpty ? null : selectedVideoFiles,
-      subtitleFiles: selectedSubtitleFiles.isEmpty
-          ? null
-          : selectedSubtitleFiles,
-    );
-
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      parsing = false;
-      parsedRows = rows;
-      currentStep = 3;
-      targetCourseId = null;
-      courseTitleController.text = _courseTitleFor(
-        selectedVideoSource ?? selectedVideoFolder ?? '',
+    try {
+      final List<ImportMatchRow> rows = await ImportMatcher.parseInBackground(
+        videoFolder: selectedVideoPath,
+        subtitleFolder: selectedSubtitlePath,
+        videoFiles: selectedVideoFiles.isEmpty ? null : selectedVideoFiles,
+        subtitleFiles: selectedSubtitleFiles.isEmpty
+            ? null
+            : selectedSubtitleFiles,
       );
-    });
+      if (!mounted) return;
+      setState(() {
+        parsedRows = rows;
+        currentStep = 3;
+        targetCourseId = null;
+        courseTitleController.text = _courseTitleFor(
+          selectedVideoSource ?? selectedVideoFolder ?? '',
+        );
+      });
+    } catch (error) {
+      if (mounted) _showMessage('解析失败：${_importErrorMessage(error)}');
+    } finally {
+      if (mounted) setState(() => parsing = false);
+    }
   }
 
   Future<void> _handleConfirmImport() async {

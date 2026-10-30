@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -33,10 +35,17 @@ class PlayerTopBar extends StatelessWidget {
     final double width = MediaQuery.sizeOf(context).width;
     final bool compact = width < 1180;
     final bool tiny = width < 820;
+    final bool phone = width < 600;
+    final TextScaler textScaler = MediaQuery.textScalerOf(context);
+    final double contentHeight = math.max(
+      tiny ? 52 : (compact ? 60 : 72),
+      textScaler.scale(tiny ? 18 : (compact ? 20 : 24)) * 1.4 +
+          textScaler.scale(11) * 1.4 +
+          12,
+    );
 
     return Container(
-      height:
-          (tiny ? 52 : (compact ? 60 : 72)) + topInset + windowControlsInset,
+      height: contentHeight + topInset + windowControlsInset,
       padding: EdgeInsets.fromLTRB(
         tiny ? 12 : (compact ? 16 : 22),
         topInset + windowControlsInset + (tiny ? 2 : 6),
@@ -76,11 +85,11 @@ class PlayerTopBar extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        const Text(
-                          '英语学习空间',
+                        Text(
+                          phone ? episodeTitle : '英语学习空间',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                             color: Color(0xFF64748B),
@@ -99,25 +108,26 @@ class PlayerTopBar extends StatelessWidget {
                       ],
                     ),
                   ),
-                  SizedBox(width: tiny ? 8 : 10),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: tiny ? 8 : 10,
-                      vertical: tiny ? 3 : 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      episodeTitle,
-                      style: TextStyle(
-                        fontSize: tiny ? 10 : 11,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF047857),
+                  if (!phone) SizedBox(width: tiny ? 8 : 10),
+                  if (!phone)
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: tiny ? 8 : 10,
+                        vertical: tiny ? 3 : 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        episodeTitle,
+                        style: TextStyle(
+                          fontSize: tiny ? 10 : 11,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF047857),
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -153,6 +163,32 @@ class _PlayerTopStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool compact = MediaQuery.sizeOf(context).width < 1180;
+    final bool phone = MediaQuery.sizeOf(context).width < 600;
+
+    if (phone) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (onTranscriptPressed != null)
+            IconButton(
+              onPressed: onTranscriptPressed,
+              tooltip: '全文阅读',
+              icon: const Icon(Icons.menu_book_outlined),
+            ),
+          if (onLearningGuidePressed != null)
+            IconButton(
+              onPressed: onLearningGuidePressed,
+              tooltip: '怎么学',
+              icon: const Icon(Icons.school_outlined),
+            ),
+          IconButton(
+            onPressed: onStatsPressed,
+            tooltip: '查看学习统计',
+            icon: const Icon(Icons.timer_outlined),
+          ),
+        ],
+      );
+    }
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: compact ? 320 : 400),

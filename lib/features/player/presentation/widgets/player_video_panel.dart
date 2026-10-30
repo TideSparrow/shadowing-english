@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 
+import '../../../settings/presentation/settings_provider.dart'
+    show playerFontOptions, playerFontScales;
 import '../../../shared/domain/subtitle_letter_case.dart';
 import '../../../shared/presentation/pad/app_design_tokens.dart';
 import '../../../shared/presentation/word_lookup_popup.dart';
@@ -18,6 +20,9 @@ class PlayerVideoPanel extends StatefulWidget {
     required this.isPlaying,
     required this.subtitleMode,
     this.subtitleLetterCase = '保留原样',
+    this.fontSize = '中',
+    this.fontScale = 1,
+    this.onSelectFontSize,
     required this.subtitleModes,
     this.embeddedSubtitleTracks = const <SubtitleTrack>[],
     this.selectedEmbeddedSubtitleId,
@@ -80,6 +85,9 @@ class PlayerVideoPanel extends StatefulWidget {
   final bool isPlaying;
   final String subtitleMode;
   final String subtitleLetterCase;
+  final String fontSize;
+  final double fontScale;
+  final ValueChanged<String>? onSelectFontSize;
   final List<String> subtitleModes;
   final List<SubtitleTrack> embeddedSubtitleTracks;
   final String? selectedEmbeddedSubtitleId;
@@ -698,9 +706,11 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: widget.isFullscreen
-                                    ? (tinyControls ? 15 : 18)
-                                    : (tinyControls ? 14 : 16),
+                                fontSize:
+                                    (widget.isFullscreen
+                                        ? (tinyControls ? 15 : 18)
+                                        : (tinyControls ? 14 : 16)) *
+                                    widget.fontScale,
                                 fontWeight: FontWeight.w700,
                                 height: 1.35,
                                 color: const Color(0xFFF7F7F7),
@@ -926,7 +936,39 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                                       fullscreen: widget.isFullscreen,
                                     ),
                                   ),
-                                  if (widget.onSelectSubtitleLetterCase != null)
+                                  if (widget.onSelectFontSize != null)
+                                    PopupMenuButton<String>(
+                                      tooltip: '字幕大小',
+                                      onSelected: (String value) {
+                                        widget.onSelectFontSize!(value);
+                                        _scheduleAutoHide();
+                                      },
+                                      itemBuilder: (BuildContext context) =>
+                                          playerFontOptions
+                                              .map(
+                                                (
+                                                  String size,
+                                                ) => CheckedPopupMenuItem<String>(
+                                                  value: size,
+                                                  checked:
+                                                      size == widget.fontSize,
+                                                  child: Text(
+                                                    '$size（${(playerFontScales[size]! * 100).round()}%）',
+                                                  ),
+                                                ),
+                                              )
+                                              .toList(growable: false),
+                                      child: _MiniPillAction(
+                                        icon: Icons.format_size_rounded,
+                                        label: compactControls ? null : '字号',
+                                        compact: compactControls,
+                                        tiny: tinyControls,
+                                        fullscreen: widget.isFullscreen,
+                                      ),
+                                    ),
+                                  if (widget.onSelectSubtitleLetterCase !=
+                                          null &&
+                                      widget.selectedEmbeddedSubtitleId == null)
                                     PopupMenuButton<String>(
                                       tooltip: '英文字幕大小写',
                                       onSelected: (String value) {
@@ -1163,9 +1205,11 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
 
   Widget _buildEnglishSubtitle(String text, {required bool tinyControls}) {
     final TextStyle style = TextStyle(
-      fontSize: widget.isFullscreen
-          ? (tinyControls ? 24 : 34)
-          : (tinyControls ? 22 : 28),
+      fontSize:
+          (widget.isFullscreen
+              ? (tinyControls ? 24 : 34)
+              : (tinyControls ? 22 : 28)) *
+          widget.fontScale,
       fontWeight: FontWeight.w800,
       height: 1.25,
       color: Colors.white,

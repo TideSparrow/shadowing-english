@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:media_kit/media_kit.dart';
 
 class _TestLibraryCatalogNotifier extends LibraryCatalogNotifier {
   @override
@@ -529,15 +530,30 @@ void main() {
     expect(find.text('全部小写'), findsNothing);
     await tester.tap(find.text('单英').last);
     await tester.pumpAndSettle();
-    expect(find.text('Aa'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('英文字幕大小写'));
-    await tester.pumpAndSettle();
-    expect(_hasCheckedMenuItem(tester, '保留原样'), isTrue);
-    await tester.tap(find.text('全部大写').last);
+    expect(find.byTooltip('英文字幕大小写'), findsNothing);
+    container.read(learningSettingsProvider.notifier).setSubtitleLetterCase('全部大写');
     await tester.pumpAndSettle();
     expect(container.read(learningSettingsProvider).subtitleLetterCase, '全部大写');
     expect(find.text('DOING'), findsWidgets);
+    final double previousFontSize = tester.widget<Text>(
+      find.descendant(of: find.byType(PlayerVideoPanel), matching: find.text('DOING')).first,
+    ).style!.fontSize!;
+    await tester.tap(find.byTooltip('字幕大小'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('最大（200%）'));
+    await tester.tap(find.text('最大（200%）'));
+    await tester.pumpAndSettle();
+    expect(container.read(learningSettingsProvider).fontSize, '最大');
+    expect(tester.widget<PlayerVideoPanel>(find.byType(PlayerVideoPanel)).fontScale, 2);
+    expect(tester.widget<PlayerSubtitleList>(find.byType(PlayerSubtitleList)).fontScale, 2);
+    expect(tester.widget<Text>(
+      find.descendant(of: find.byType(PlayerVideoPanel), matching: find.text('DOING')).first,
+    ).style!.fontSize, previousFontSize * 2);
+    await tester.tap(find.byTooltip('字幕大小'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('中（100%）'));
+    await tester.pumpAndSettle();
+
     final PadLandscapePlayerScreenState playerState = tester.state(
       find.byType(PadLandscapePlayerScreen),
     );
@@ -558,10 +574,8 @@ void main() {
           .subtitleLetterCase,
       '全部大写',
     );
-    await tester.tap(find.byTooltip('英文字幕大小写'));
-    await tester.pumpAndSettle();
-    expect(_hasCheckedMenuItem(tester, '全部大写'), isTrue);
-    await tester.tap(find.text('保留原样').last);
+    expect(find.byTooltip('英文字幕大小写'), findsNothing);
+    container.read(learningSettingsProvider.notifier).setSubtitleLetterCase('保留原样');
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.mic_none_rounded), findsNothing);
@@ -574,6 +588,54 @@ void main() {
 
     expect(find.text('已加入听写练习'), findsOneWidget);
   });
+
+
+  for (final Size size in <Size>[const Size(390, 844), const Size(844, 390)]) {
+    testWidgets('subtitle size can change in a small fullscreen player at $size', (WidgetTester tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final PlayerMockState state = PlayerMockState()..loadLines(const <PlayerSubtitleLine>[_dictionaryLine]);
+      await tester.pumpWidget(MaterialApp(
+        home: PlayerFullscreenVideoScreen(
+          playerState: state,
+          highlightWords: true,
+          isMuted: false,
+          volumeLevel: 1,
+          onTogglePlaying: state.togglePlaying,
+          onPreviousLine: state.previousLine,
+          onReplayLine: () => state.selectLine(0),
+          onNextLine: state.nextLine,
+          onSeekBackward: () {},
+          onSeekForward: () {},
+          onSelectLine: state.selectLine,
+          onSeek: (_) {},
+          onSpeedSelected: state.selectSpeed,
+          onSelectSubtitleMode: state.setSubtitleMode,
+          onSelectFontSize: (_) {},
+          onToggleShadowing: state.toggleShadowing,
+          onToggleLoop: state.toggleLoop,
+          onToggleMuted: () {},
+          onVolumeChanged: (_) {},
+          onSubtitleLookupOpen: () {},
+          onCollectWord: (_) {},
+          episodes: const <LibraryEpisodeItem>[],
+          activeEpisodeId: 'episode-1',
+          onExit: () {},
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('字幕大小'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('最大（200%）'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('最大（200%）'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<PlayerVideoPanel>(find.byType(PlayerVideoPanel)).fontScale, 2);
+      expect(find.byTooltip('英文字幕大小写'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('player shows real empty state when subtitles are missing', (
     WidgetTester tester,
@@ -1190,6 +1252,11 @@ void main() {
             onSeek: (_) {},
             onSpeedSelected: state.selectSpeed,
             onSelectSubtitleMode: state.setSubtitleMode,
+            embeddedSubtitleTracks: const <SubtitleTrack>[
+              SubtitleTrack('1', 'Embedded', 'eng'),
+            ],
+            onSelectEmbeddedSubtitle: (_) => state.setSubtitleMode('隐藏'),
+            onSelectFontSize: settings.read(learningSettingsProvider.notifier).setFontSize,
             onSelectSubtitleLetterCase: settings
                 .read(learningSettingsProvider.notifier)
                 .setSubtitleLetterCase,
@@ -1246,6 +1313,28 @@ void main() {
       await tester.tap(find.text('句首字母大写').last);
       await tester.pumpAndSettle();
       expect(find.text('Hello'), findsNWidgets(2));
+
+      await tester.tap(find.byTooltip('字幕模式'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('英语 · Embedded').last);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('英文字幕大小写'), findsNothing);
+      expect(find.byTooltip('字幕大小'), findsOneWidget);
+      await tester.tap(find.byTooltip('字幕大小'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('超大（170%）'));
+      await tester.tap(find.text('超大（170%）'));
+      await tester.pumpAndSettle();
+      expect(settings.read(learningSettingsProvider).fontSize, '超大');
+      expect(tester.widget<PlayerVideoPanel>(find.byType(PlayerVideoPanel)).fontScale, 1.7);
+      expect(tester.widget<PlayerSubtitleList>(find.byType(PlayerSubtitleList)).fontScale, 1.7);
+
+
+      await tester.tap(find.byTooltip('字幕模式'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('单英').last);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('英文字幕大小写'), findsOneWidget);
       expect(
         settings.read(learningSettingsProvider).subtitleLetterCase,
         '句首字母大写',

@@ -77,6 +77,8 @@ Short loops keep auditory recognition and spoken output together. A few lines at
 - **Optional AI subtitles**: Generate or switch subtitles for videos without them using your own provider configuration.
 - **Local first**: Your videos, subtitles, and learning records remain centered on your device.
 
+The `.apkg` templates provide live English pronunciation on both sides without bundling audio files. Official Anki clients use native TTS. Web clients that allow card scripts and provide the Web Speech API show a replay button using a local English voice, without external speech API calls. Clients that block scripts or lack an English voice cannot provide playback; unsupported TTS syntax stays hidden. Native TTS requires Anki 2.1.20+, AnkiMobile 2.0.56+, or AnkiDroid 2.17+; Linux needs a TTS add-on. Re-export and re-import older decks with template updates enabled.
+
 ## Subtitles: from import to word-level shadowing
 
 Shadowing English does more than display one subtitle line over a video. It turns subtitles into a learning timeline you can navigate, loop, search, and shadow. Choose the workflow that fits your material:
@@ -142,7 +144,7 @@ Starting with v0.1.2, each release includes `SHA256SUMS.txt` to verify downloade
 
 ### Run from source
 
-Flutter 3.44.4 is required and pinned through FVM. Install [FVM](https://fvm.app/documentation/getting-started/installation) before the first run.
+Flutter 3.44.4 is required. FVM and VS Code are optional; FVM is recommended for pinning the SDK version. To use FVM, [install it](https://fvm.app/documentation/getting-started/installation) first.
 
 ```bash
 git clone https://github.com/TideSparrow/shadowing-english.git
@@ -160,6 +162,8 @@ If you use your own Flutter installation, run:
 flutter pub get
 flutter run
 ```
+
+Without VS Code, run `flutter devices`, then `flutter run -d <device-id>` from a terminal. See the [contributor guide](CONTRIBUTING.md) for setup checks, the code map, and entry points for changes.
 
 ## Import learning materials
 

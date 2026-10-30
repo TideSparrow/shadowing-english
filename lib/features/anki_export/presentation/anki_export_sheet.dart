@@ -226,7 +226,7 @@ class _AnkiExportSheetState extends ConsumerState<AnkiExportSheet> {
               const SizedBox(height: 14),
               Text(
                 _format == AnkiExportFormat.apkg
-                    ? '自带卡片样式，导入即可复习；重复导入可更新同一张卡片。'
+                    ? '自带卡片样式和实时英文朗读，不附带音频文件。需要客户端支持朗读或卡片脚本，且设备有英语语音；重复导入可更新卡片。'
                     : '普通表格，包含英文、音标、释义、原句语境等独立字段。',
                 style: const TextStyle(
                   color: AppDesignTokens.textPrimary,

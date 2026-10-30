@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 
 import '../../library/presentation/library_mock_data.dart';
+import '../../settings/presentation/settings_provider.dart'
+    show playerFontScales;
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import 'player_mock_state.dart';
 import 'widgets/player_transcript_panel.dart';
@@ -47,6 +49,8 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
     this.onAiExplain = _ignoreLine,
     this.onRegenerateAiLine,
     this.fontScale = 1,
+    this.fontSize = '中',
+    this.onSelectFontSize,
     required this.episodes,
     required this.activeEpisodeId,
     required this.onExit,
@@ -94,6 +98,8 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
   final ValueChanged<int> onAiExplain;
   final Future<void> Function(int index)? onRegenerateAiLine;
   final double fontScale;
+  final String fontSize;
+  final ValueChanged<String>? onSelectFontSize;
   final List<LibraryEpisodeItem> episodes;
   final String activeEpisodeId;
   final VoidCallback onExit;
@@ -119,6 +125,9 @@ class _PlayerFullscreenVideoScreenState
   bool _showControls = true;
   Timer? _refreshTimer;
   late String _subtitleLetterCase = widget.subtitleLetterCase;
+  late String _fontSize = widget.fontSize;
+  late double _fontScale = widget.fontScale;
+  late String? _selectedEmbeddedSubtitleId = widget.selectedEmbeddedSubtitleId;
   late bool _isMuted = widget.isMuted;
   late double _volumeLevel = widget.volumeLevel;
 
@@ -140,6 +149,15 @@ class _PlayerFullscreenVideoScreenState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.subtitleLetterCase != widget.subtitleLetterCase) {
       _subtitleLetterCase = widget.subtitleLetterCase;
+    }
+    if (oldWidget.fontSize != widget.fontSize ||
+        oldWidget.fontScale != widget.fontScale) {
+      _fontSize = widget.fontSize;
+      _fontScale = widget.fontScale;
+    }
+    if (oldWidget.selectedEmbeddedSubtitleId !=
+        widget.selectedEmbeddedSubtitleId) {
+      _selectedEmbeddedSubtitleId = widget.selectedEmbeddedSubtitleId;
     }
   }
 
@@ -192,10 +210,21 @@ class _PlayerFullscreenVideoScreenState
               subtitleMode: player.subtitleMode,
               subtitleModes: player.availableSubtitleModes,
               embeddedSubtitleTracks: widget.embeddedSubtitleTracks,
-              selectedEmbeddedSubtitleId: widget.selectedEmbeddedSubtitleId,
+              selectedEmbeddedSubtitleId: _selectedEmbeddedSubtitleId,
               currentWordIndex: player.currentWordIndex,
               highlightWords: widget.highlightWords,
               subtitleLetterCase: _subtitleLetterCase,
+              fontSize: _fontSize,
+              fontScale: _fontScale,
+              onSelectFontSize: widget.onSelectFontSize == null
+                  ? null
+                  : (String value) {
+                      widget.onSelectFontSize!(value);
+                      setState(() {
+                        _fontSize = value;
+                        _fontScale = playerFontScales[value] ?? 1;
+                      });
+                    },
               subtitleWordHighlightStyle: widget.subtitleWordHighlightStyle,
               subtitleWordHighlightBorderWidth:
                   widget.subtitleWordHighlightBorderWidth,
@@ -223,10 +252,14 @@ class _PlayerFullscreenVideoScreenState
                       widget.onSelectSubtitleLetterCase!(value);
                       setState(() => _subtitleLetterCase = value);
                     },
-              onSelectSubtitleMode: (String value) =>
-                  _refresh(() => widget.onSelectSubtitleMode(value)),
-              onSelectEmbeddedSubtitle: (SubtitleTrack? track) =>
-                  _refresh(() => widget.onSelectEmbeddedSubtitle?.call(track)),
+              onSelectSubtitleMode: (String value) => _refresh(() {
+                widget.onSelectSubtitleMode(value);
+                _selectedEmbeddedSubtitleId = null;
+              }),
+              onSelectEmbeddedSubtitle: (SubtitleTrack? track) => _refresh(() {
+                widget.onSelectEmbeddedSubtitle?.call(track);
+                _selectedEmbeddedSubtitleId = track?.id;
+              }),
               onToggleShadowing: () => _refresh(widget.onToggleShadowing),
               onToggleLoop: () => _refresh(widget.onToggleLoop),
               onToggleMuted: () {
@@ -336,7 +369,7 @@ class _PlayerFullscreenVideoScreenState
               child: _FullscreenSubtitlePanel(
                 episodeId: widget.activeEpisodeId,
                 player: player,
-                fontScale: widget.fontScale,
+                fontScale: _fontScale,
                 highlightWords: widget.highlightWords,
                 subtitleLetterCase: _subtitleLetterCase,
                 subtitleWordHighlightStyle: widget.subtitleWordHighlightStyle,

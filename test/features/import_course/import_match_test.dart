@@ -4,6 +4,27 @@ import 'package:common_learn_english/features/import_course/domain/import_match.
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'background parsing scans files and preserves detected subtitle tracks',
+    () async {
+      final Directory root = Directory.systemTemp.createTempSync(
+        'background-import-',
+      );
+      addTearDown(() => root.deleteSync(recursive: true));
+      File('${root.path}/lesson1.mkv').createSync();
+      File(
+        '${root.path}/lesson1.srt',
+      ).writeAsStringSync('1\n00:00:01,000 --> 00:00:02,000\nHello world\n');
+      final List<ImportMatchRow> rows = await ImportMatcher.parseInBackground(
+        videoFolder: root.path,
+        subtitleFolder: root.path,
+      );
+      expect(rows, hasLength(1));
+      expect(rows.single.videoFile, 'lesson1.mkv');
+      expect(rows.single.englishSubtitlePath, '${root.path}/lesson1.srt');
+    },
+  );
+
   test('parse should map video files to subtitle match status', () {
     final Directory tempDir = Directory.systemTemp.createTempSync(
       'import-match-test',

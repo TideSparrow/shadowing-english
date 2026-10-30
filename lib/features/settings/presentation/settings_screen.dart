@@ -117,7 +117,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
               _SelectRow(
                 title: '字幕字体大小',
-                description: '调整屏幕文本的大小。',
+                description: '调整学习字幕和文字型内嵌字幕大小，也可在播放器中直接调节。',
                 value: settings.fontSize,
                 options: playerFontOptions,
                 onChanged: (String? value) {

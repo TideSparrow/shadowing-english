@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'cover_image_provider.dart';
@@ -16,11 +18,9 @@ class CoverImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (_isRemote(path)) {
-      return Image.network(path, fit: fit, errorBuilder: errorBuilder);
-    }
-
-    final ImageProvider<Object>? provider = coverImageProviderForPath(path);
+    final ImageProvider<Object>? provider = _isRemote(path)
+        ? NetworkImage(path)
+        : coverImageProviderForPath(path);
     if (provider == null) {
       return _buildFallback(
         context,
@@ -28,7 +28,30 @@ class CoverImage extends StatelessWidget {
       );
     }
 
-    return Image(image: provider, fit: fit, errorBuilder: errorBuilder);
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double logicalSize = math.max(
+          constraints.hasBoundedWidth ? constraints.maxWidth : 0,
+          constraints.hasBoundedHeight ? constraints.maxHeight : 0,
+        );
+        final double pixelSize = logicalSize > 0
+            ? logicalSize * MediaQuery.devicePixelRatioOf(context)
+            : 1024;
+        // Bucket sizes to reuse cached thumbnails while resizing the window.
+        // Bound the longest edge and preserve the source aspect ratio.
+        final int decodeSize = ((pixelSize / 64).ceil() * 64).clamp(64, 2048);
+        return Image(
+          image: ResizeImage(
+            provider,
+            width: decodeSize,
+            height: decodeSize,
+            policy: ResizeImagePolicy.fit,
+          ),
+          fit: fit,
+          errorBuilder: errorBuilder,
+        );
+      },
+    );
   }
 
   bool _isRemote(String value) {
