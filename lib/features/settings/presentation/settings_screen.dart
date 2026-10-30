@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../constants/feature_flags.dart';
 import '../../../utils/url_utils.dart';
 import '../../navigation/presentation/navigation_destination.dart';
 import '../../shared/data/word_pronunciation_service.dart';
@@ -12,6 +13,7 @@ import '../../shared/presentation/pad/pad_top_bar.dart';
 import 'ai_subtitle_management_screen.dart';
 import 'app_update_provider.dart';
 import 'settings_provider.dart';
+import 'widgets/pronunciation_settings_card.dart';
 import 'widgets/settings_group_card.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -231,6 +233,10 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           SizedBox(height: compact ? 20 : 24),
+          if (pronunciationScoringEnabled) ...<Widget>[
+            const PronunciationSettingsCard(),
+            SizedBox(height: compact ? 20 : 24),
+          ],
           SettingsGroupCard(
             title: '翻译',
             icon: Icons.translate_rounded,

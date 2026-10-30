@@ -28,6 +28,8 @@ class PlayerTranscriptPanel extends StatefulWidget {
     required this.onTogglePlaying,
     this.episodeId,
     this.onPronounce,
+    this.onAssessLine,
+    this.pronunciationUnavailableReasonForLine,
     this.onRegenerateAiSubtitles,
     this.onDeleteAiSubtitles,
     this.onRegenerateAiLine,
@@ -56,6 +58,8 @@ class PlayerTranscriptPanel extends StatefulWidget {
   final VoidCallback onTogglePlaying;
   final String? episodeId;
   final VoidCallback? onPronounce;
+  final ValueChanged<int>? onAssessLine;
+  final String? Function(int index)? pronunciationUnavailableReasonForLine;
   final VoidCallback? onRegenerateAiSubtitles;
   final VoidCallback? onDeleteAiSubtitles;
   final Future<void> Function(int index)? onRegenerateAiLine;
@@ -107,6 +111,9 @@ class _PlayerTranscriptPanelState extends State<PlayerTranscriptPanel> {
             isPlaying: widget.isPlaying,
             onTogglePlaying: widget.onTogglePlaying,
             onPronounce: widget.onPronounce,
+            onAssessLine: widget.onAssessLine,
+            pronunciationUnavailableReasonForLine:
+                widget.pronunciationUnavailableReasonForLine,
             onRegenerateAiSubtitles: widget.onRegenerateAiSubtitles,
             onDeleteAiSubtitles: widget.onDeleteAiSubtitles,
             onRegenerateAiLine: widget.onRegenerateAiLine,

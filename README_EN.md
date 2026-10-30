@@ -142,6 +142,8 @@ Visit [Releases](https://github.com/TideSparrow/shadowing-english/releases/lates
 
 Starting with v0.1.2, each release includes `SHA256SUMS.txt` to verify downloaded files.
 
+Local shadowing recording, playback, and original-audio waveform comparison do not require an assessment API key. Cloud scoring and its credential settings are currently hidden. The Linux desktop build requires `libsecret-1-0`; source builds also require `libsecret-1-dev`. Microphone recording requires `pulseaudio-utils` (for `parecord` and `pactl`) and a running PulseAudio service; PipeWire setups need PulseAudio compatibility enabled.
+
 ### Run from source
 
 Flutter 3.44.4 is required. FVM and VS Code are optional; FVM is recommended for pinning the SDK version. To use FVM, [install it](https://fvm.app/documentation/getting-started/installation) first.

@@ -1,14 +1,17 @@
 package com.shadowing.english
 
 import android.app.Activity
+import android.media.AudioFormat
 import android.content.Intent
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
@@ -27,6 +30,9 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.ceil
 
 class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
     private lateinit var importPickerChannel: MethodChannel
@@ -44,6 +50,8 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
     private val pendingTtsRequests = ArrayDeque<NativeTtsRequest>()
     private var activeTtsResult: MethodChannel.Result? = null
     private var activeTtsUtteranceId: String? = null
+    private val pronunciationExtractionRequests =
+        ConcurrentHashMap<String, AtomicBoolean>()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -73,6 +81,8 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
             "getEngines" -> handleNativeTtsGetEngines(result)
             "getVoices" -> handleNativeTtsGetVoices(call, result)
             "splitAudio" -> handleSplitAudio(call, result)
+            "extractPronunciationAudio" -> handlePronunciationAudioExtraction(call, result)
+            "cancelPronunciationAudioExtraction" -> handleCancelPronunciationAudioExtraction(call, result)
             else -> result.notImplemented()
         }
     }
@@ -413,6 +423,232 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
                 postError(result, exception)
             }
         }.start()
+    }
+
+    private fun handlePronunciationAudioExtraction(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        val requestId = call.argument<String>("requestId")
+        val sourcePath = call.argument<String>("sourcePath")
+        val startMs = call.argument<Int>("startMs")
+        val endMs = call.argument<Int>("endMs")
+        if (requestId.isNullOrBlank() || sourcePath.isNullOrBlank() ||
+            startMs == null || endMs == null || startMs < 0 || endMs <= startMs ||
+            endMs - startMs > MAX_PRONUNCIATION_SEGMENT_MS
+        ) {
+            result.error("bad_args", "Invalid pronunciation audio range.", null)
+            return
+        }
+        val cancelled = AtomicBoolean(false)
+        pronunciationExtractionRequests[requestId] = cancelled
+        Thread {
+            val outputDir = File(cacheDir, "pronunciation_$requestId")
+            try {
+                val path = extractPronunciationAudio(
+                    sourcePath = sourcePath,
+                    startMs = startMs,
+                    endMs = endMs,
+                    outputDir = outputDir,
+                    cancelled = cancelled,
+                )
+                if (cancelled.get()) {
+                    outputDir.deleteRecursively()
+                    postResult(result, null)
+                } else {
+                    postResult(result, path)
+                }
+            } catch (exception: Exception) {
+                outputDir.deleteRecursively()
+                if (cancelled.get()) {
+                    postResult(result, null)
+                } else {
+                    Handler(Looper.getMainLooper()).post {
+                        result.error(
+                            "pronunciation_extract_failed",
+                            "Unable to extract this video segment.",
+                            null,
+                        )
+                    }
+                }
+            } finally {
+                pronunciationExtractionRequests.remove(requestId, cancelled)
+            }
+        }.start()
+    }
+
+    private fun handleCancelPronunciationAudioExtraction(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        val requestId = call.argument<String>("requestId")
+        val cancelled = requestId?.let(pronunciationExtractionRequests::get)
+        cancelled?.set(true)
+        postResult(result, cancelled != null)
+    }
+
+    private fun extractPronunciationAudio(
+        sourcePath: String,
+        startMs: Int,
+        endMs: Int,
+        outputDir: File,
+        cancelled: AtomicBoolean,
+    ): String {
+        val source = File(sourcePath)
+        require(source.exists())
+        ensureDirectoryExists(outputDir, "pronunciation audio output directory")
+        val extractor = MediaExtractor()
+        var codec: MediaCodec? = null
+        val output = File(outputDir, "reference.wav")
+        var writer: WavChunkWriter? = null
+        try {
+            extractor.setDataSource(source.absolutePath)
+            val audioTrackIndex = (0 until extractor.trackCount).firstOrNull { index ->
+                extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
+                    ?.startsWith("audio/") == true
+            } ?: error("no audio track found")
+            val sourceFormat = extractor.getTrackFormat(audioTrackIndex)
+            val mime = sourceFormat.getString(MediaFormat.KEY_MIME)
+                ?: error("missing audio mime")
+            extractor.selectTrack(audioTrackIndex)
+            val startUs = startMs.toLong() * 1000L
+            val endUs = endMs.toLong() * 1000L
+            extractor.seekTo(maxOf(0L, startUs - MAX_PRONUNCIATION_PREROLL_US), MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+            if (extractor.sampleTime >= 0L && startUs - extractor.sampleTime > MAX_PRONUNCIATION_PREROLL_US) {
+                error("no nearby key frame")
+            }
+            val decoder = MediaCodec.createDecoderByType(mime)
+            codec = decoder
+            decoder.configure(sourceFormat, null, null, 0)
+            decoder.start()
+
+            val info = MediaCodec.BufferInfo()
+            var inputDone = false
+            var outputDone = false
+            var pcm16OutputVerified = Build.VERSION.SDK_INT < Build.VERSION_CODES.N
+            val extractionDeadlineMs =
+                SystemClock.elapsedRealtime() + MAX_PRONUNCIATION_EXTRACTION_TIMEOUT_MS
+            var sampleRate = sourceFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            var channelCount = if (sourceFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                sourceFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            } else {
+                1
+            }.coerceAtLeast(1)
+            writer = WavChunkWriter(output)
+
+            while (!outputDone && !cancelled.get()) {
+                check(SystemClock.elapsedRealtime() < extractionDeadlineMs) {
+                    "pronunciation extraction timed out"
+                }
+                if (!inputDone) {
+                    val inputIndex = decoder.dequeueInputBuffer(10_000)
+                    if (inputIndex >= 0) {
+                        val inputBuffer = decoder.getInputBuffer(inputIndex)!!
+                        inputBuffer.clear()
+                        val sampleTimeUs = extractor.sampleTime
+                        val sampleSize = if (sampleTimeUs >= 0L && sampleTimeUs <= endUs) {
+                            extractor.readSampleData(inputBuffer, 0)
+                        } else {
+                            -1
+                        }
+                        if (sampleSize < 0) {
+                            decoder.queueInputBuffer(
+                                inputIndex,
+                                0,
+                                0,
+                                endUs,
+                                MediaCodec.BUFFER_FLAG_END_OF_STREAM,
+                            )
+                            inputDone = true
+                        } else {
+                            decoder.queueInputBuffer(inputIndex, 0, sampleSize, sampleTimeUs, 0)
+                            extractor.advance()
+                        }
+                    }
+                }
+
+                val outputIndex = decoder.dequeueOutputBuffer(info, 10_000)
+                when {
+                    outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        val format = decoder.outputFormat
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            val encoding = format.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                            require(encoding == AudioFormat.ENCODING_PCM_16BIT) {
+                                "unsupported decoder PCM encoding"
+                            }
+                            pcm16OutputVerified = true
+                        }
+                        sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                        channelCount = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                            format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                        } else {
+                            channelCount
+                        }.coerceAtLeast(1)
+                    }
+                    outputIndex >= 0 -> {
+                        check(pcm16OutputVerified) {
+                            "decoder PCM encoding was not verified"
+                        }
+                        val outputBuffer = decoder.getOutputBuffer(outputIndex)!!
+                        if (info.size > 0 && info.presentationTimeUs < endUs) {
+                            outputBuffer.position(info.offset)
+                            outputBuffer.limit(info.offset + info.size)
+                            val bytesPerFrame = 2 * channelCount
+                            val pcm = outputBuffer.slice().order(ByteOrder.LITTLE_ENDIAN)
+                            val frames = pcm.remaining() / bytesPerFrame
+                            val startFrame = ceil(
+                                ((startUs - info.presentationTimeUs).toDouble() * sampleRate) / 1_000_000.0,
+                            ).toInt().coerceIn(0, frames)
+                            val endFrame = ceil(
+                                ((endUs - info.presentationTimeUs).toDouble() * sampleRate) / 1_000_000.0,
+                            ).toInt().coerceIn(0, frames)
+                            if (endFrame > startFrame) {
+                                val bounded = pcm.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+                                bounded.position(startFrame * bytesPerFrame)
+                                bounded.limit(endFrame * bytesPerFrame)
+                                writer.writePcm(
+                                    pcm = bounded.slice().order(ByteOrder.LITTLE_ENDIAN),
+                                    inputSampleRate = sampleRate,
+                                    inputChannelCount = channelCount,
+                                )
+                            }
+                        }
+                        if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0 ||
+                            info.presentationTimeUs >= endUs
+                        ) {
+                            outputDone = true
+                        }
+                        decoder.releaseOutputBuffer(outputIndex, false)
+                    }
+                }
+            }
+            if (cancelled.get()) {
+                outputDir.deleteRecursively()
+                error("cancelled")
+            }
+            writer.close()
+            writer = null
+            require(output.exists() && output.length() > WAV_HEADER_BYTES) {
+                "empty pronunciation audio segment"
+            }
+            return output.absolutePath
+        } catch (exception: Exception) {
+            try {
+                writer?.close()
+            } catch (_: Exception) {}
+            writer = null
+            outputDir.deleteRecursively()
+            throw exception
+        } finally {
+            try {
+                writer?.close()
+            } catch (_: Exception) {}
+            try {
+                codec?.stop()
+            } catch (_: Exception) {}
+            codec?.release()
+            extractor.release()
+        }
     }
 
     private fun splitAudio(sourcePath: String, chunkMs: Int): List<Map<String, Any>> {
@@ -771,6 +1007,8 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
     }
 
     override fun onDestroy() {
+        pronunciationExtractionRequests.values.forEach { it.set(true) }
+        pronunciationExtractionRequests.clear()
         nativeTts?.shutdown()
         nativeTts = null
         nativeTtsEngine = ""
@@ -781,6 +1019,9 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
         private const val REQUEST_PICK_DIRECTORY = 28061
         private const val WAV_HEADER_BYTES = 44
         private const val WAV_SAMPLE_RATE = 16000
+        private const val MAX_PRONUNCIATION_SEGMENT_MS = 60000
+        private const val MAX_PRONUNCIATION_PREROLL_US = 10_000_000L
+        private const val MAX_PRONUNCIATION_EXTRACTION_TIMEOUT_MS = 30_000L
     }
 
     private data class NativeTtsRequest(

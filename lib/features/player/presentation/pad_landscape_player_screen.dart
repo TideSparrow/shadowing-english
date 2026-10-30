@@ -16,10 +16,12 @@ import '../../navigation/presentation/navigation_destination.dart';
 import '../../phrases/presentation/phrase_book_provider.dart';
 import '../../settings/presentation/settings_provider.dart';
 import '../../shared/data/word_lookup_service.dart';
+import '../../shared/data/word_pronunciation_service.dart';
 import '../../shared/presentation/app_loading_overlay.dart';
 import '../../shared/presentation/pad/pad_scaffold.dart';
 import '../../words/data/offline_word_dictionary.dart';
 import '../../words/presentation/word_book_provider.dart';
+import '../domain/pronunciation_assessment.dart';
 import 'asr_subtitle_cache.dart';
 import 'asr_subtitle_job.dart';
 import 'asr_subtitle_service.dart';
@@ -35,6 +37,7 @@ import 'player_native_subtitles.dart';
 import 'player_subtitle_loader.dart';
 import 'player_system_media_controls.dart';
 import 'player_video_init.dart';
+import 'pronunciation_target_selection.dart';
 import 'subtitle_reference_review.dart';
 import 'transcript_reader_session.dart';
 import 'widgets/ai_subtitle_generation_progress_dialog.dart';
@@ -43,6 +46,7 @@ import 'widgets/player_subtitle_list.dart';
 import 'widgets/player_top_bar.dart';
 import 'widgets/player_transcript_panel.dart';
 import 'widgets/player_video_panel.dart';
+import 'widgets/pronunciation_assessment_dialog.dart';
 
 class PadLandscapePlayerScreen extends ConsumerStatefulWidget {
   const PadLandscapePlayerScreen({
@@ -93,6 +97,7 @@ class PadLandscapePlayerScreenState
   Duration _lastTrackedVideoPosition = Duration.zero;
   bool _didAutoOpenFullscreen = false;
   bool _isFullscreenOpen = false;
+  bool _pronunciationDialogActive = false;
   bool _generatingAiSubtitles = false;
   AsrSubtitleCancellationToken? _aiSubtitleCancellationToken;
   double? _aiSubtitleProgressValue;
@@ -515,6 +520,68 @@ class PadLandscapePlayerScreenState
     unawaited(_videoPlayer?.pause());
   }
 
+  PronunciationTargetSelection _selectPronunciationForLine(int index) =>
+      selectPronunciationTarget(
+        state: state,
+        videoSource: _videoAsset,
+        videoReady: _videoReady,
+        videoDuration: _videoDuration,
+        subtitleIndex: index,
+      );
+
+  String? _pronunciationUnavailableReasonForLine(int index) =>
+      _selectPronunciationForLine(index).unavailableReason;
+
+  void _handleAssessLine(int index) {
+    final PronunciationAssessmentTarget? target = _selectPronunciationForLine(
+      index,
+    ).target;
+    if (target == null) {
+      _showMessage(
+        _pronunciationUnavailableReasonForLine(index) ?? '当前句暂不可跟读。',
+      );
+      return;
+    }
+    unawaited(_openPronunciationAssessment(target));
+  }
+
+  void _handleAssessVisibleLine() {
+    final PronunciationTargetSelection selection = selectPronunciationTarget(
+      state: state,
+      videoSource: _videoAsset,
+      videoReady: _videoReady,
+      videoDuration: _videoDuration,
+    );
+    final PronunciationAssessmentTarget? target = selection.target;
+    if (target == null) {
+      _showMessage(selection.unavailableReason ?? '当前句暂不可跟读。');
+      return;
+    }
+    unawaited(_openPronunciationAssessment(target));
+  }
+
+  Future<void> _openPronunciationAssessment(
+    PronunciationAssessmentTarget target,
+  ) async {
+    if (_pronunciationDialogActive) return;
+    _pronunciationDialogActive = true;
+    setState(() => state.isPlaying = false);
+    PlayerSystemMediaControls.updatePlaybackState(isPlaying: false);
+    try {
+      await _videoPlayer?.pause();
+      try {
+        await ref.read(wordPronunciationServiceProvider).stop();
+      } catch (_) {}
+      if (!mounted) return;
+      await showPronunciationAssessmentDialog(context, target: target);
+    } catch (_) {
+      if (mounted) _showMessage('无法暂停当前视频，暂时不能开始录音。');
+    } finally {
+      _pronunciationDialogActive = false;
+      if (mounted) setState(() {});
+    }
+  }
+
   void _applyPlaybackMode() {
     PlayerSystemMediaControls.updatePlaybackState(isPlaying: state.isPlaying);
     if (!state.isPlaying) {
@@ -698,6 +765,13 @@ class PadLandscapePlayerScreenState
     final PlayerSubtitleLine activeLine = state.hasLines
         ? state.visibleLine ?? _emptySubtitleLine
         : _emptySubtitleLine;
+    final PronunciationTargetSelection visibleAssessment =
+        selectPronunciationTarget(
+          state: state,
+          videoSource: _videoAsset,
+          videoReady: _videoReady,
+          videoDuration: _videoDuration,
+        );
     final LibraryCourseData? course = courseContext.course;
     final LibraryEpisodeItem? episode = courseContext.episode;
     final LearningSettingsState settings = ref.watch(learningSettingsProvider);
@@ -830,6 +904,12 @@ class PadLandscapePlayerScreenState
                               onToggleMuted: _handleToggleMuted,
                               onVolumeChanged: _handleVolumeChanged,
                               onSubtitleLookupOpen: _stopVideo,
+                              onAssessVisibleLine:
+                                  visibleAssessment.target == null
+                                  ? null
+                                  : _handleAssessVisibleLine,
+                              assessmentUnavailableReason:
+                                  visibleAssessment.unavailableReason,
                               onCollectWord: (String word) =>
                                   _handleCollectWord(word, courseContext),
                               onCollectWordAtTime: (String word, String time) =>
@@ -922,6 +1002,9 @@ class PadLandscapePlayerScreenState
                                       onLoopFromLine: _handleLoopFromLine,
                                       onDictationLine: _handleDictationLine,
                                       onAiExplain: _handleAiExplain,
+                                      onAssessLine: _handleAssessLine,
+                                      pronunciationUnavailableReasonForLine:
+                                          _pronunciationUnavailableReasonForLine,
                                       loopingLineIndex: state.isLooping
                                           ? state.activeLineIndex
                                           : null,
@@ -1038,6 +1121,7 @@ class PadLandscapePlayerScreenState
   }
 
   void _handleTogglePlaying() {
+    if (_pronunciationDialogActive) return;
     setState(() {
       state.togglePlaying(
         allowWithoutLines:
@@ -1620,6 +1704,8 @@ class PadLandscapePlayerScreenState
                 .setFontSize,
             episodes: episodes,
             activeEpisodeId: widget.episodeId,
+            videoSource: _videoAsset,
+            onAssessTarget: _openPronunciationAssessment,
             onExit: () => Navigator.of(context).maybePop(),
             videoSurface: fullscreenVideoSurface,
             videoAspectRatio: _videoAspectRatio,

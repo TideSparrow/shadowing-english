@@ -35,6 +35,8 @@ class PlayerSubtitleList extends StatefulWidget {
     this.onTogglePlaying,
     this.episodeId,
     this.onPronounce,
+    this.onAssessLine,
+    this.pronunciationUnavailableReasonForLine,
     this.showAiGenerateSubtitles = false,
     this.generatingAiSubtitles = false,
     this.aiSubtitleProgressValue,
@@ -71,6 +73,8 @@ class PlayerSubtitleList extends StatefulWidget {
   final VoidCallback? onTogglePlaying;
   final String? episodeId;
   final VoidCallback? onPronounce;
+  final ValueChanged<int>? onAssessLine;
+  final String? Function(int index)? pronunciationUnavailableReasonForLine;
   final bool showAiGenerateSubtitles;
   final bool generatingAiSubtitles;
   final double? aiSubtitleProgressValue;
@@ -413,6 +417,9 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
             final bool active = originalIndex == widget.activeIndex;
             final bool isLooping = originalIndex == widget.loopingLineIndex;
             final bool isPast = originalIndex < widget.activeIndex;
+            final String? pronunciationUnavailableReason = widget
+                .pronunciationUnavailableReasonForLine
+                ?.call(originalIndex);
             final double textOpacity = active ? 1 : (isPast ? 0.84 : 0.60);
             final double chineseFontSize =
                 (active ? 19.0 : 17.0) * widget.fontScale;
@@ -486,6 +493,9 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                                     ? AppDesignTokens.brandGreenDark
                                     : AppDesignTokens.primaryBlueDark,
                                 minimumSize: const Size(44, 44),
+                                fixedSize: const Size(44, 44),
+                                padding: EdgeInsets.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -496,7 +506,7 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                                     : Icons.play_arrow_rounded,
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 line.startTime,
@@ -511,6 +521,34 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                                 ),
                               ),
                             ),
+                            if (widget.onAssessLine != null) ...<Widget>[
+                              IconButton.filledTonal(
+                                key: ValueKey<String>(
+                                  'subtitle-line-assess-$originalIndex',
+                                ),
+                                tooltip:
+                                    pronunciationUnavailableReason ?? '跟读录音',
+                                onPressed:
+                                    pronunciationUnavailableReason == null
+                                    ? () => widget.onAssessLine!(originalIndex)
+                                    : null,
+                                icon: const Icon(Icons.mic_rounded, size: 20),
+                                style: IconButton.styleFrom(
+                                  foregroundColor:
+                                      AppDesignTokens.primaryBlueDark,
+                                  backgroundColor: AppDesignTokens.softWhite,
+                                  minimumSize: const Size(44, 44),
+                                  fixedSize: const Size(44, 44),
+                                  padding: EdgeInsets.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
                             FilledButton.tonal(
                               key: ValueKey<String>(
                                 'subtitle-line-loop-$originalIndex',
@@ -525,13 +563,16 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                                     ? AppDesignTokens.brandGreenDark
                                     : AppDesignTokens.textSecondary,
                                 minimumSize: const Size(44, 44),
+                                fixedSize: const Size(44, 44),
+                                padding: EdgeInsets.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                               ),
                               child: const Icon(Icons.repeat_one_rounded),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             FilledButton.tonal(
                               onPressed: () =>
                                   widget.onBookmarkLine(originalIndex),
@@ -539,13 +580,16 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                                 backgroundColor: const Color(0xFFFFF7D6),
                                 foregroundColor: const Color(0xFFB58600),
                                 minimumSize: const Size(44, 44),
+                                fixedSize: const Size(44, 44),
+                                padding: EdgeInsets.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                               ),
                               child: const Icon(Icons.star_rounded),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             FilledButton.tonal(
                               onPressed: () =>
                                   _openActions(context, line, originalIndex),
@@ -553,6 +597,9 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                                 backgroundColor: AppDesignTokens.softWhite,
                                 foregroundColor: AppDesignTokens.textSecondary,
                                 minimumSize: const Size(44, 44),
+                                fixedSize: const Size(44, 44),
+                                padding: EdgeInsets.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),

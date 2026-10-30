@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:common_learn_english/features/settings/data/pronunciation_credentials.dart';
 import 'package:common_learn_english/features/settings/presentation/settings_provider.dart';
 import 'package:common_learn_english/features/settings/presentation/settings_screen.dart';
+import 'package:common_learn_english/features/settings/presentation/widgets/pronunciation_settings_card.dart';
 import 'package:common_learn_english/features/settings/presentation/widgets/settings_group_card.dart';
 import 'package:common_learn_english/features/shared/data/word_pronunciation_service.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +18,15 @@ void main() {
       tester.view.physicalSize = const Size(1366, 1024);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      final ProviderContainer container = ProviderContainer();
+      int credentialInitializations = 0;
+      final ProviderContainer container = ProviderContainer(
+        overrides: <Override>[
+          pronunciationCredentialStoreProvider.overrideWith((Ref ref) {
+            credentialInitializations++;
+            throw StateError('Hidden assessment must not load credentials');
+          }),
+        ],
+      );
       addTearDown(container.dispose);
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -44,6 +54,8 @@ void main() {
       control.onChanged!(3);
       await tester.pumpAndSettle();
       expect(container.read(learningSettingsProvider).ttsRate, 3);
+      expect(find.byType(PronunciationSettingsCard), findsNothing);
+      expect(credentialInitializations, 0);
       expect(tester.takeException(), isNull);
     },
   );

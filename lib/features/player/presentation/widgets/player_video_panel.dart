@@ -55,6 +55,8 @@ class PlayerVideoPanel extends StatefulWidget {
     required this.onVolumeChanged,
     required this.onToggleFullscreen,
     this.onSubtitleLookupOpen,
+    this.onAssessVisibleLine,
+    this.assessmentUnavailableReason,
     this.onCollectWord,
     this.onCollectWordAtTime,
     this.onFavoriteWord,
@@ -120,6 +122,8 @@ class PlayerVideoPanel extends StatefulWidget {
   final ValueChanged<double> onVolumeChanged;
   final VoidCallback onToggleFullscreen;
   final VoidCallback? onSubtitleLookupOpen;
+  final VoidCallback? onAssessVisibleLine;
+  final String? assessmentUnavailableReason;
   final ValueChanged<String>? onCollectWord;
   final void Function(String word, String time)? onCollectWordAtTime;
   final ValueChanged<String>? onFavoriteWord;
@@ -743,6 +747,37 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                       ),
                     ),
                   ),
+                  if (widget.onAssessVisibleLine != null ||
+                      widget.assessmentUnavailableReason != null)
+                    Positioned(
+                      right: dockInset,
+                      bottom: _showControls ? subtitleBottom : 18,
+                      child: Tooltip(
+                        message:
+                            widget.assessmentUnavailableReason ?? '跟读录音 · 原声对照',
+                        child: IconButton.filledTonal(
+                          key: ValueKey<String>(
+                            widget.isFullscreen
+                                ? 'fullscreen-visible-pronunciation-assessment'
+                                : 'player-visible-pronunciation-assessment',
+                          ),
+                          onPressed:
+                              widget.assessmentUnavailableReason != null ||
+                                  widget.onAssessVisibleLine == null
+                              ? null
+                              : () => _handleControlTap(
+                                  widget.onAssessVisibleLine!,
+                                ),
+                          icon: const Icon(Icons.mic_rounded),
+                          style: IconButton.styleFrom(
+                            backgroundColor: const Color(0xFF0F7A43),
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(44, 44),
+                            shape: const CircleBorder(),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (_gestureHintText != null)
                     Center(
                       child: IgnorePointer(

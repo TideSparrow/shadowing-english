@@ -86,11 +86,14 @@ dependencies:
   html: ^0.15.6
   sqlite3: 3.5.2 # Keep aligned with assets/anki/sqlite3.wasm.
   share_plus: 11.1.0
+  record: ^7.1.2
+  flutter_secure_storage: ^10.3.4
 
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  path_provider_platform_interface: ^2.1.3
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

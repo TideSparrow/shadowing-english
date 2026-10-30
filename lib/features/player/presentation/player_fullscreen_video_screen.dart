@@ -8,7 +8,9 @@ import '../../library/presentation/library_mock_data.dart';
 import '../../settings/presentation/settings_provider.dart'
     show playerFontScales;
 import '../../shared/presentation/pad/app_design_tokens.dart';
+import '../domain/pronunciation_assessment.dart';
 import 'player_mock_state.dart';
+import 'pronunciation_target_selection.dart';
 import 'widgets/player_transcript_panel.dart';
 import 'widgets/player_video_panel.dart';
 
@@ -53,6 +55,8 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
     this.onSelectFontSize,
     required this.episodes,
     required this.activeEpisodeId,
+    this.videoSource,
+    this.onAssessTarget = _ignoreTarget,
     required this.onExit,
     this.videoSurface,
     this.videoAspectRatio = 16 / 9,
@@ -102,6 +106,8 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
   final ValueChanged<String>? onSelectFontSize;
   final List<LibraryEpisodeItem> episodes;
   final String activeEpisodeId;
+  final String? videoSource;
+  final ValueChanged<PronunciationAssessmentTarget> onAssessTarget;
   final VoidCallback onExit;
   final Widget? videoSurface;
   final double videoAspectRatio;
@@ -179,6 +185,13 @@ class _PlayerFullscreenVideoScreenState
   Widget build(BuildContext context) {
     final PlayerMockState player = widget.playerState;
     final PlayerSubtitleLine line = player.visibleLine ?? _emptySubtitleLine;
+    final PronunciationTargetSelection visibleAssessment =
+        selectPronunciationTarget(
+          state: player,
+          videoSource: widget.videoSource,
+          videoReady: widget.videoReady,
+          videoDuration: widget.videoDuration,
+        );
     final double topInset = MediaQuery.paddingOf(context).top;
     final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
     final double backButtonTopInset = topInset + (isMacOS ? 44 : 12);
@@ -275,6 +288,10 @@ class _PlayerFullscreenVideoScreenState
                 });
               },
               onSubtitleLookupOpen: () => _refresh(widget.onSubtitleLookupOpen),
+              onAssessVisibleLine: visibleAssessment.target == null
+                  ? null
+                  : () => widget.onAssessTarget(visibleAssessment.target!),
+              assessmentUnavailableReason: visibleAssessment.unavailableReason,
               onCollectWord: widget.onCollectWord,
               onCollectWordAtTime: widget.onCollectWordAtTime,
               onFavoriteWord: widget.onFavoriteWord,
@@ -385,6 +402,9 @@ class _PlayerFullscreenVideoScreenState
                     _refresh(() => widget.onLoopFromLine(index)),
                 onDictationLine: widget.onDictationLine,
                 onAiExplain: widget.onAiExplain,
+                onAssessLine: _handleAssessLine,
+                pronunciationUnavailableReasonForLine:
+                    _lineAssessmentUnavailableReason,
                 onRegenerateAiLine: widget.onRegenerateAiLine,
                 onTogglePlaying: () => _refresh(widget.onTogglePlaying),
                 onPronounce: () => _refresh(widget.onSubtitleLookupOpen),
@@ -393,6 +413,25 @@ class _PlayerFullscreenVideoScreenState
         ],
       ),
     );
+  }
+
+  PronunciationTargetSelection _selectLineAssessment(int index) =>
+      selectPronunciationTarget(
+        state: widget.playerState,
+        videoSource: widget.videoSource,
+        videoReady: widget.videoReady,
+        videoDuration: widget.videoDuration,
+        subtitleIndex: index,
+      );
+
+  String? _lineAssessmentUnavailableReason(int index) =>
+      _selectLineAssessment(index).unavailableReason;
+
+  void _handleAssessLine(int index) {
+    final PronunciationAssessmentTarget? target = _selectLineAssessment(
+      index,
+    ).target;
+    if (target != null) widget.onAssessTarget(target);
   }
 }
 
@@ -416,6 +455,8 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
     required this.onDictationLine,
     required this.onAiExplain,
     this.onRegenerateAiLine,
+    required this.onAssessLine,
+    required this.pronunciationUnavailableReasonForLine,
     required this.onTogglePlaying,
     required this.onPronounce,
   });
@@ -436,6 +477,8 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
   final ValueChanged<int> onDictationLine;
   final ValueChanged<int> onAiExplain;
   final Future<void> Function(int index)? onRegenerateAiLine;
+  final ValueChanged<int> onAssessLine;
+  final String? Function(int index) pronunciationUnavailableReasonForLine;
   final VoidCallback onTogglePlaying;
   final VoidCallback onPronounce;
 
@@ -469,6 +512,9 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
           onLoopFromLine: onLoopFromLine,
           onDictationLine: onDictationLine,
           onAiExplain: onAiExplain,
+          onAssessLine: onAssessLine,
+          pronunciationUnavailableReasonForLine:
+              pronunciationUnavailableReasonForLine,
           onRegenerateAiLine: onRegenerateAiLine,
           loopingLineIndex: player.isLooping ? player.activeLineIndex : null,
           isPlaying: player.isPlaying,
@@ -489,6 +535,8 @@ const PlayerSubtitleLine _emptySubtitleLine = PlayerSubtitleLine(
 );
 
 void _ignoreLine(int _) {}
+
+void _ignoreTarget(PronunciationAssessmentTarget _) {}
 
 class _FullscreenEpisodePanel extends StatelessWidget {
   const _FullscreenEpisodePanel({

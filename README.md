@@ -154,6 +154,8 @@ AI 识别仍可能受到背景音乐、多人重叠说话、口音和录音质�
 
 桌面安装包内置了用于本地音频提取的精简版 FFmpeg，无需用户额外安装；许可证和构建信息会随应用一起发布。
 
+当前提供本地跟读录音、回放和原声波形对照，无需评分 API 密钥；云端评分及其配置入口暂时隐藏。Linux 桌面版运行需要 `libsecret-1-0`，从源码构建还需要 `libsecret-1-dev`。麦克风录音依赖 `pulseaudio-utils`（提供 `parecord` 和 `pactl`）及可用的 PulseAudio 服务，PipeWire 环境需启用 PulseAudio 兼容服务。
+
 ### 从源码运行
 
 需要 Flutter 3.44.4；FVM 和 VS Code 都是可选工具。推荐通过 FVM 固定版本，使用前先安装 [FVM](https://fvm.app/documentation/getting-started/installation)。
