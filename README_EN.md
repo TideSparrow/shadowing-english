@@ -21,6 +21,8 @@ English · [中文](README.md)
 
 [Download the latest release](https://github.com/TideSparrow/shadowing-english/releases/latest) · [Subtitle guide](#subtitles-from-import-to-word-level-shadowing) · [Run from source](#run-from-source) · [Import learning materials](#import-learning-materials)
 
+**Future features**: Improve study, review, and video navigation first, then expand contextual vocabulary learning, illustrated cards, IELTS reference-list coverage tasks, and dialogue practice with recording and dubbing. [Read the roadmap and implementation order (Chinese)](ROADMAP.md). These are planned improvements, not released features.
+
 ## Screenshots
 
 | Sentence-by-sentence player | Import local videos and subtitles |
