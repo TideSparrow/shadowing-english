@@ -23,6 +23,8 @@ English · [中文](README.md)
 
 **Future features**: Improve study, review, and video navigation first, then expand contextual vocabulary learning, illustrated cards, IELTS reference-list coverage tasks, and dialogue practice with recording and dubbing. [Read the roadmap and implementation order (Chinese)](ROADMAP.md). These are planned improvements, not released features.
 
+Reference for future planning: [Everyone Can Use English / Enjoy](https://github.com/ZuodaoTech/everyone-can-use-english), focusing on learning methods and AI-assisted practice workflows. Candidate improvements will be evaluated through the roadmap.
+
 ## Screenshots
 
 | Sentence-by-sentence player | Import local videos and subtitles |
