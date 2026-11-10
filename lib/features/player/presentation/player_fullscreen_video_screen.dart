@@ -49,6 +49,7 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
     this.onLoopFromLine = _ignoreLine,
     this.onDictationLine = _ignoreLine,
     this.onAiExplain = _ignoreLine,
+    this.onExplainCurrentLine,
     this.onRegenerateAiLine,
     this.fontScale = 1,
     this.fontSize = '中',
@@ -100,6 +101,7 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
   final ValueChanged<int> onLoopFromLine;
   final ValueChanged<int> onDictationLine;
   final ValueChanged<int> onAiExplain;
+  final VoidCallback? onExplainCurrentLine;
   final Future<void> Function(int index)? onRegenerateAiLine;
   final double fontScale;
   final String fontSize;
@@ -288,6 +290,7 @@ class _PlayerFullscreenVideoScreenState
                 });
               },
               onSubtitleLookupOpen: () => _refresh(widget.onSubtitleLookupOpen),
+              onExplainCurrentLine: widget.onExplainCurrentLine,
               onAssessVisibleLine: visibleAssessment.target == null
                   ? null
                   : () => widget.onAssessTarget(visibleAssessment.target!),

@@ -1,0 +1,14 @@
+{
+  "generator": "Built-in image generation",
+  "purpose": "Small decorative spot illustrations and illustrative avatars; unrelated to the factual source scene.",
+  "assets": [
+    {
+      "file": "lesson-tutor.png",
+      "prompt": "Use case: illustration-story. Asset: a reusable friendly tutor illustration for an English-language learning card. A polished original storybook / animated-film character, an approachable young adult female teacher with short dark wavy hair, round glasses, warm terracotta cardigan over a cream shirt. Half-body, three-quarter view, smiling thoughtfully, holding an open sage-green notebook in one hand and gesturing gently with the other hand as if helping someone understand an expression. Warm soft lighting, soft painted texture, rounded appealing proportions, expressive eyes, professional editorial illustration. Full visible notebook and hands. Isolated character with a genuinely transparent background and generous clear margin; no room, no shadows stretching to canvas edges, no text, no letters, no lettering, no speech bubbles, no logos, no watermark. Portrait 3:4 composition."
+    },
+    {
+      "file": "lesson-dialogue.png",
+      "prompt": "Use case: illustration-story. Asset: an inviting small conversation illustration for an English-learning usage card. Two original polished storybook / animated-film young adult characters, one woman with short dark wavy hair and terracotta cardigan and one friendly man in a muted blue shirt, facing each other in natural conversation over a small cafe table. Waist-up view with visible gestures; the woman asks something with a small open-hand gesture, the man listens with a friendly smile. Soft warm painted texture and light, cream honey sage and soft blue accents, crisp readable silhouettes at small sizes. Isolated vignette with genuinely transparent background around the two people and small table. Wide 4:3 composition, no text, no lettering, no speech bubbles, no logos, no watermark. Finished professional illustration, no sketch style."
+    }
+  ]
+}

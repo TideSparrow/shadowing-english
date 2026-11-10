@@ -10,6 +10,7 @@ import '../features/growth/presentation/growth_screen.dart';
 import '../features/guide/presentation/guide_screen.dart';
 import '../features/home/presentation/pad_home_screen.dart';
 import '../features/import_course/presentation/import_course_screen.dart';
+import '../features/lessons/presentation/lessons_screen.dart';
 import '../features/library/presentation/library_screen.dart';
 import '../features/phrases/presentation/phrases_screen.dart';
 import '../features/player/presentation/player_screen.dart';
@@ -26,6 +27,7 @@ enum SGRoute {
   review,
   reviewSession,
   phrases,
+  lessons,
   words,
   phraseReview,
   guide,
@@ -89,6 +91,11 @@ GoRouter goRouter(Ref ref) => GoRouter(
         session: true,
         practice: state.uri.queryParameters['practice'] == '1',
       ),
+    ).fade(),
+    GoRoute(
+      path: SGRoute.lessons.route,
+      builder: (BuildContext context, GoRouterState state) =>
+          const LessonsScreen(),
     ).fade(),
     GoRoute(
       path: SGRoute.phrases.route,

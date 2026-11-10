@@ -745,7 +745,7 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.auto_awesome_outlined),
-                  title: const Text('AI 解释这句话'),
+                  title: const Text('精讲这句'),
                   onTap: () => Navigator.of(context).pop('ai-explain'),
                 ),
                 if (widget.onRegenerateAiLine != null)

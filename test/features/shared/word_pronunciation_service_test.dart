@@ -105,6 +105,7 @@ class _FakeWordPronunciationTtsClient extends WordPronunciationTtsClient {
     String engine = '',
     String voice = '',
     double rate = 0.75,
+    Duration speechTimeout = const Duration(seconds: 8),
   }) async {
     languages.add(language);
     spokenTexts.add(text);

@@ -56,6 +56,7 @@ class PlayerVideoPanel extends StatefulWidget {
     required this.onToggleFullscreen,
     this.onSubtitleLookupOpen,
     this.onAssessVisibleLine,
+    this.onExplainCurrentLine,
     this.assessmentUnavailableReason,
     this.onCollectWord,
     this.onCollectWordAtTime,
@@ -123,6 +124,7 @@ class PlayerVideoPanel extends StatefulWidget {
   final VoidCallback onToggleFullscreen;
   final VoidCallback? onSubtitleLookupOpen;
   final VoidCallback? onAssessVisibleLine;
+  final VoidCallback? onExplainCurrentLine;
   final String? assessmentUnavailableReason;
   final ValueChanged<String>? onCollectWord;
   final void Function(String word, String time)? onCollectWordAtTime;
@@ -653,26 +655,64 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                         : (tinyControls ? 12 : 18),
                     right: widget.isFullscreen ? 20 : (tinyControls ? 12 : 16),
                     child: AnimatedOpacity(
-                      opacity: _showControls ? 1 : 0,
+                      opacity:
+                          _showControls || widget.onExplainCurrentLine != null
+                          ? 1
+                          : 0,
                       duration: const Duration(milliseconds: 180),
                       child: IgnorePointer(
-                        ignoring: !_showControls,
-                        child: _StatusBubble(
-                          compact: tinyControls,
-                          icon: widget.videoErrorText != null
-                              ? Icons.info_outline_rounded
-                              : Icons.menu_book_rounded,
-                          label: widget.videoErrorText ?? '学习模式',
-                          background: widget.isFullscreen
-                              ? const Color(0x33101827)
-                              : (widget.videoErrorText != null
-                                    ? const Color(0xCCFFFBEB)
-                                    : const Color(0xCCFFFFFF)),
-                          foreground: widget.isFullscreen
-                              ? Colors.white
-                              : (widget.videoErrorText != null
-                                    ? AppDesignTokens.textPrimary
-                                    : AppDesignTokens.primaryBlueDark),
+                        ignoring:
+                            !_showControls &&
+                            widget.onExplainCurrentLine == null,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            if ((widget.onExplainCurrentLine == null ||
+                                    !tinyControls) &&
+                                _showControls)
+                              _StatusBubble(
+                                compact: tinyControls,
+                                icon: widget.videoErrorText != null
+                                    ? Icons.info_outline_rounded
+                                    : Icons.menu_book_rounded,
+                                label: widget.videoErrorText ?? '学习模式',
+                                background: widget.isFullscreen
+                                    ? const Color(0x33101827)
+                                    : (widget.videoErrorText != null
+                                          ? const Color(0xCCFFFBEB)
+                                          : const Color(0xCCFFFFFF)),
+                                foreground: widget.isFullscreen
+                                    ? Colors.white
+                                    : (widget.videoErrorText != null
+                                          ? AppDesignTokens.textPrimary
+                                          : AppDesignTokens.primaryBlueDark),
+                              ),
+                            if (widget.onExplainCurrentLine !=
+                                null) ...<Widget>[
+                              if (!tinyControls && _showControls)
+                                const SizedBox(width: 10),
+                              FilledButton.tonalIcon(
+                                key: const Key('player-explain-current-line'),
+                                onPressed: () => _handleControlTap(
+                                  widget.onExplainCurrentLine!,
+                                ),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AppDesignTokens.skyLight,
+                                  foregroundColor: const Color(0xFF07658F),
+                                  minimumSize: const Size(44, 40),
+                                  textStyle: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.record_voice_over_outlined,
+                                  size: 18,
+                                ),
+                                label: const Text('精讲这句'),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),

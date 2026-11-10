@@ -10,6 +10,10 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../../../router/app_router.dart';
 import '../../guide/presentation/guide_screen.dart';
 import '../../home/presentation/learning_dashboard_provider.dart';
+import '../../lessons/domain/intensive_lesson.dart';
+import '../../lessons/domain/lesson_context.dart';
+import '../../lessons/presentation/lesson_dialog.dart';
+import '../../lessons/presentation/lessons_screen.dart';
 import '../../library/presentation/library_catalog_provider.dart';
 import '../../library/presentation/library_mock_data.dart';
 import '../../navigation/presentation/navigation_destination.dart';
@@ -98,6 +102,7 @@ class PadLandscapePlayerScreenState
   bool _didAutoOpenFullscreen = false;
   bool _isFullscreenOpen = false;
   bool _pronunciationDialogActive = false;
+  bool _lessonDialogActive = false;
   bool _generatingAiSubtitles = false;
   AsrSubtitleCancellationToken? _aiSubtitleCancellationToken;
   double? _aiSubtitleProgressValue;
@@ -325,6 +330,13 @@ class PadLandscapePlayerScreenState
       await _loadCachedAiSubtitles(
         validateReferenceSignature: _referenceSubtitleLines.isNotEmpty,
       );
+      if (!mounted || state.hasLines || _referenceSubtitleLines.isEmpty) return;
+      final int position = state.positionMs;
+      setState(() {
+        state
+          ..loadLines(_referenceSubtitleLines)
+          ..seekToMilliseconds(position);
+      });
     } catch (_) {
       // Reference subtitles are optional and must not block video playback.
     }
@@ -563,7 +575,7 @@ class PadLandscapePlayerScreenState
   Future<void> _openPronunciationAssessment(
     PronunciationAssessmentTarget target,
   ) async {
-    if (_pronunciationDialogActive) return;
+    if (_pronunciationDialogActive || _lessonDialogActive) return;
     _pronunciationDialogActive = true;
     setState(() => state.isPlaying = false);
     PlayerSystemMediaControls.updatePlaybackState(isPlaying: false);
@@ -881,6 +893,8 @@ class PadLandscapePlayerScreenState
                               isMuted: _isMuted,
                               volumeLevel: _volumeLevel,
                               onTogglePlaying: _handleTogglePlaying,
+                              onExplainCurrentLine: () =>
+                                  unawaited(_openLesson()),
                               onPreviousLine: _handlePreviousLine,
                               onReplayLine: _handleReplayLine,
                               onNextLine: _handleNextLine,
@@ -967,6 +981,13 @@ class PadLandscapePlayerScreenState
                             Expanded(
                               child: state.hasLines
                                   ? PlayerTranscriptPanel(
+                                      lessonPanel: EpisodeLessonList(
+                                        episodeId: widget.episodeId,
+                                        onOpen: (IntensiveLesson lesson) =>
+                                            unawaited(
+                                              _openLesson(saved: lesson),
+                                            ),
+                                      ),
                                       episodeId: widget.episodeId,
                                       lines: state.lines,
                                       activeIndex: state.activeLineIndex,
@@ -1121,7 +1142,7 @@ class PadLandscapePlayerScreenState
   }
 
   void _handleTogglePlaying() {
-    if (_pronunciationDialogActive) return;
+    if (_pronunciationDialogActive || _lessonDialogActive) return;
     setState(() {
       state.togglePlaying(
         allowWithoutLines:
@@ -1149,6 +1170,7 @@ class PadLandscapePlayerScreenState
   }
 
   void _handlePreviousLine() {
+    if (_lessonDialogActive) return;
     setState(state.previousLine);
     _syncTranscriptReader();
     _seekToActiveLine();
@@ -1163,6 +1185,7 @@ class PadLandscapePlayerScreenState
   }
 
   void _handleNextLine() {
+    if (_lessonDialogActive) return;
     setState(state.nextLine);
     _syncTranscriptReader();
     _seekToActiveLine();
@@ -1607,25 +1630,88 @@ class PadLandscapePlayerScreenState
     _showMessage('已加入听写练习');
   }
 
-  void _handleAiExplain(int index) {
-    final PlayerSubtitleLine line = state.lines[index];
-    showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('AI 解释'),
-          content: Text(
-            '这是对该句的临时说明：\n${line.english}\n\n后续可接入 AI 接口进行更完整的语法和表达解析。',
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('关闭'),
-            ),
-          ],
+  void _handleAiExplain(int index) => unawaited(_openLesson(index: index));
+
+  Future<void> _openLesson({int? index, IntensiveLesson? saved}) async {
+    if (_lessonDialogActive || _pronunciationDialogActive) return;
+    _lessonDialogActive = true;
+    LessonDialogAction? action;
+    LessonSource? source;
+    setState(() => state.isPlaying = false);
+    PlayerSystemMediaControls.updatePlaybackState(isPlaying: false);
+    try {
+      await _videoPlayer?.pause();
+      try {
+        await ref.read(wordPronunciationServiceProvider).stop();
+      } catch (_) {}
+      if (!mounted) return;
+      if (saved != null) {
+        source = saved.source;
+      } else {
+        List<PlayerSubtitleLine> lines = state.lines;
+        int target = index ?? state.activeLineIndex;
+        // A selected native track can differ from the external/AI transcript.
+        // Never explain the hidden transcript as if it were the visible one.
+        if (_selectedEmbeddedSubtitleId != null && index == null) {
+          lines = await extractEmbeddedEnglishSubtitles(
+            videoPath: _videoAsset ?? '',
+            tracks: _embeddedSubtitleTracks,
+            trackId: _selectedEmbeddedSubtitleId,
+          );
+          if (!mounted) return;
+          final int subtitleMs = state.positionMs - state.subtitleDelayMs;
+          target = lines.lastIndexWhere(
+            (PlayerSubtitleLine line) => line.startMs <= subtitleMs,
+          );
+        }
+        if (lines.isEmpty || target < 0 || target >= lines.length) {
+          _showMessage('当前没有可读取的英文字幕，请导入字幕或生成 AI 字幕。');
+          return;
+        }
+        final PlayerCourseLookupResult course = resolvePlayerCourseForEpisode(
+          courses: ref.read(libraryCatalogProvider),
+          episodeId: widget.episodeId,
         );
-      },
-    );
+        source = selectLessonContext(
+          lines: lines,
+          index: target,
+          episodeId: widget.episodeId,
+          courseTitle: course.course?.title ?? '本地课程',
+          episodeTitle: course.episode?.title ?? '当前剧集',
+        );
+      }
+      if (!mounted) return;
+      action = await showLessonDialog(
+        context,
+        source: source,
+        savedLesson: saved,
+        canResume: true,
+        canOpenSource: _videoReady && _videoAsset != null,
+      );
+    } catch (_) {
+      if (mounted) _showMessage('暂时无法打开精讲，请检查字幕后重试。');
+    } finally {
+      _lessonDialogActive = false;
+    }
+    if (!mounted) return;
+    if (action == LessonDialogAction.settings) {
+      await context.push(SGRoute.settings.route);
+    } else if (action == LessonDialogAction.resume) {
+      if (!state.isPlaying) _handleTogglePlaying();
+    } else if (action == LessonDialogAction.source && source != null) {
+      final int milliseconds = (source.startMs + state.subtitleDelayMs).clamp(
+        0,
+        _videoDuration.inMilliseconds,
+      );
+      setState(() {
+        state
+          ..isLooping = false
+          ..isPlaying = false
+          ..seekToMilliseconds(milliseconds);
+      });
+      await _videoPlayer?.seek(Duration(milliseconds: milliseconds));
+      if (mounted) _handleTogglePlaying();
+    }
   }
 
   Future<void> _handleOpenFullscreen(List<LibraryEpisodeItem> episodes) async {
@@ -1652,6 +1738,7 @@ class PadLandscapePlayerScreenState
       nextEpisodeId = await Navigator.of(context).push<String>(
         MaterialPageRoute<String>(
           builder: (BuildContext context) => PlayerFullscreenVideoScreen(
+            onExplainCurrentLine: () => unawaited(_openLesson()),
             playerState: state,
             highlightWords: highlightWords,
             subtitleLetterCase: ref

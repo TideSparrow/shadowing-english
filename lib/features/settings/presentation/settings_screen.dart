@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../constants/feature_flags.dart';
 import '../../../utils/url_utils.dart';
+import '../../lessons/presentation/lesson_settings_card.dart';
 import '../../navigation/presentation/navigation_destination.dart';
 import '../../shared/data/word_pronunciation_service.dart';
 import '../../shared/presentation/pad/pad_compact.dart';
@@ -418,6 +419,8 @@ class SettingsScreen extends ConsumerWidget {
               ],
             ],
           ),
+          SizedBox(height: compact ? 20 : 24),
+          const LessonSettingsCard(),
           SizedBox(height: compact ? 20 : 24),
           SettingsGroupCard(
             title: 'AI生成可跟读的词级同步字幕',

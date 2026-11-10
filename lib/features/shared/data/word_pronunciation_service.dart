@@ -65,7 +65,12 @@ class WordPronunciationService {
   final double selectedRate;
   final WordPronunciationTtsClient _ttsClient;
 
-  Future<void> speak(String text, {String language = 'en-US'}) async {
+  Future<void> speak(
+    String text, {
+    String language = 'en-US',
+    Duration speechTimeout = const Duration(seconds: 8),
+    double? rate,
+  }) async {
     if (speakOverride != null) {
       await speakOverride!(text);
       return;
@@ -80,8 +85,9 @@ class WordPronunciationService {
       normalizedText,
       language: language,
       engine: selectedEngine,
-      voice: selectedVoice,
-      rate: selectedRate,
+      voice: language.startsWith('en') ? selectedVoice : '',
+      rate: rate ?? selectedRate,
+      speechTimeout: speechTimeout,
     );
   }
 
@@ -207,6 +213,7 @@ class WordPronunciationTtsClient {
     String engine = '',
     String voice = '',
     double rate = _defaultPronunciationSpeechRate,
+    Duration speechTimeout = const Duration(seconds: 8),
   }) async {
     try {
       final bool? success = await _nativeChannel.invokeMethod<bool>(
@@ -224,7 +231,12 @@ class WordPronunciationTtsClient {
       }
       throw const WordPronunciationException();
     } on MissingPluginException {
-      await _speakWithFlutterTts(text, language: language, rate: rate);
+      await _speakWithFlutterTts(
+        text,
+        language: language,
+        rate: rate,
+        speechTimeout: speechTimeout,
+      );
     } on PlatformException {
       throw const WordPronunciationException();
     }
@@ -248,6 +260,7 @@ class WordPronunciationTtsClient {
     String normalizedText, {
     required String language,
     required double rate,
+    required Duration speechTimeout,
   }) async {
     _ensureHandlers();
     if (_activeSpeakCompleter != null) {
@@ -258,11 +271,19 @@ class WordPronunciationTtsClient {
     await _client.awaitSpeakCompletion(true);
     final Completer<void> completer = Completer<void>();
     _activeSpeakCompleter = completer;
-    await _ensureTtsCallSucceeded(_client.speak(normalizedText));
+    final Future<void> speaking = _ensureTtsCallSucceeded(
+      _client.speak(normalizedText),
+    );
     try {
-      await completer.future.timeout(const Duration(seconds: 8));
+      // Some platforms do not resolve speak() when stop() is called. The local
+      // completion signal lets a stopped narration leave its queue promptly.
+      await Future.any<void>(<Future<void>>[
+        speaking,
+        completer.future,
+      ]).timeout(speechTimeout);
     } on TimeoutException {
       await _client.stop();
+      throw const WordPronunciationException('设备朗读超时，请重试。');
     } finally {
       if (identical(_activeSpeakCompleter, completer)) {
         _activeSpeakCompleter = null;

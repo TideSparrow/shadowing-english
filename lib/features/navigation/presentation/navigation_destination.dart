@@ -50,6 +50,14 @@ enum AppNavDestination {
     icon: Icons.menu_book_outlined,
     activeIcon: Icons.menu_book_rounded,
   ),
+  lessons(
+    route: '/lessons',
+    label: '精讲',
+    title: '精讲',
+    subtitle: '回顾视频中的表达、场景与讲解。',
+    icon: Icons.record_voice_over_outlined,
+    activeIcon: Icons.record_voice_over_rounded,
+  ),
   guide(
     route: '/guide',
     label: '怎么学',

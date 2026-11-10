@@ -19,7 +19,7 @@ English · [中文](README.md)
 [![GitHub issues](https://img.shields.io/github/issues/TideSparrow/shadowing-english)](https://github.com/TideSparrow/shadowing-english/issues)
 [![Buy me a coffee](https://img.shields.io/badge/Buy_me_a_coffee-FFDD00?logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/marklongpcm)
 
-[Download the latest release](https://github.com/TideSparrow/shadowing-english/releases/latest) · [Subtitle guide](#subtitles-from-import-to-word-level-shadowing) · [Run from source](#run-from-source) · [Import learning materials](#import-learning-materials)
+[Download the latest release](https://github.com/TideSparrow/shadowing-english/releases/latest) · [Subtitle guide](#subtitles-from-import-to-word-level-shadowing) · [Subtitle lessons & Token costs](#saved-subtitle-lessons) · [Run from source](#run-from-source) · [Import learning materials](#import-learning-materials)
 
 **Future features**: Improve study, review, and video navigation first, then expand contextual vocabulary learning, illustrated cards, IELTS reference-list coverage tasks, and dialogue practice with recording and dubbing. [Read the roadmap and implementation order (Chinese)](ROADMAP.md). These are planned improvements, not released features.
 
@@ -29,6 +29,9 @@ English · [中文](README.md)
 | :---: | :---: |
 | <img src="assets/showcase/player.png" alt="Sentence practice, playback controls, and subtitle panel" width="100%" /> | <img src="assets/showcase/import-course.jpg" alt="Import local videos and subtitles" width="100%" /> |
 | Tap a line, loop the difficult part, and stay with the original scene. | Choose your own media and subtitles, review the matches, then start learning. |
+| AI subtitle lessons · Understand the meaning | Lesson library · Save and revisit |
+| <img src="assets/showcase/lesson-dialog.jpg" alt="Actual app screenshot of contextual lesson cards with reported input, output and total Tokens, narration playback and an independent speed selector" width="100%" /> | <img src="assets/showcase/lesson-library.jpg" alt="Actual app screenshot of saved lesson cards with search, course filters and card/list controls" width="100%" /> |
+| Explain a line using nearby dialogue, including pitfalls and examples. New analysis consumes your model's Tokens. | Cards are saved locally and reopening them makes no AI request. Switch between cards and lists; pagination appears above 24 groups. |
 | Word lookup in context | Full transcript, synced with playback |
 | <img src="assets/showcase/word-lookup-popup.png" alt="Translation and context popup after tapping a word in the sentence transcript" width="100%" /> | <img src="assets/showcase/full-transcript-reader.png" alt="Full word-by-word transcript reader with the current sentence and word highlighted" width="100%" /> |
 | Tap a subtitle word for its meaning, sentence context, saving, and pronunciation. | Open the complete word-by-word transcript; playback keeps the current sentence and word in view. |
@@ -77,6 +80,7 @@ Short loops keep auditory recognition and spoken output together. A few lines at
 - **Shadowing practice**: Record each shadowing session as part of your learning activity.
 - **Learning progress**: Track study time, sentences, phrases, course progress, levels, and achievements.
 - **Optional AI subtitles**: Generate or switch subtitles for videos without them using your own provider configuration.
+- **AI subtitle lessons (consume Tokens)**: Explain the current utterance using nearby dialogue, with three automatically saved cards covering context, expressions, and usage. [How to use lessons and understand Token costs](#saved-subtitle-lessons).
 - **Local first**: Your videos, subtitles, and learning records remain centered on your device.
 
 The `.apkg` templates provide live English pronunciation on both sides without bundling audio files. Official Anki clients use native TTS. Web clients that allow card scripts and provide the Web Speech API show a replay button using a local English voice, without external speech API calls. Clients that block scripts or lack an English voice cannot provide playback; unsupported TTS syntax stays hidden. Native TTS requires Anki 2.1.20+, AnkiMobile 2.0.56+, or AnkiDroid 2.17+; Linux needs a TTS add-on. Re-export and re-import older decks with template updates enabled.
@@ -120,6 +124,37 @@ When usable English external or embedded subtitles are available, the app can us
 - **Usable results are preserved where possible**: Common timestamp overlaps and missing word timings are repaired locally. If Chinese translation is incomplete, the generated English subtitle is kept whenever possible.
 
 AI recognition can still be affected by background music, overlapping speakers, accents, and recording quality. For important material, use an existing subtitle as a reference and review the result in Manage AI Subtitles before relying on it long-term.
+
+## Saved subtitle lessons
+
+When you recognize every word but still miss the speaker's meaning, use nearby dialogue to understand the whole utterance, its key expression, and common pitfalls. Situated examples help you use the expression elsewhere.
+
+**New analysis consumes Tokens from your own configured language-model account and may incur provider charges. Saved cards can be reviewed locally.**
+
+[View the actual lesson dialog](assets/showcase/lesson-dialog.jpg) · [View the actual lesson library](assets/showcase/lesson-library.jpg)
+
+### How to use it
+
+1. **Configure AI**: Open Settings → Translation (设置 → 翻译), choose a language-model provider, and enter your API key, endpoint, and model. Ordinary machine-translation APIs cannot generate lessons. Without a configured model, no analysis request is sent.
+2. **Explain the current line**: Play a video with English subtitles and click **精讲这句** (Explain this line) at the upper right of the player, or choose the same action from a subtitle's menu. Playback pauses. If the lesson is not already saved, clicking sends an AI request to complete and explain the current utterance using nearby dialogue.
+3. **Read the three cards**: Switch among **场景理解** (Context), **表达拆解** (Expression), and **用法对照** (Usage) for a natural translation, the reasoning behind an expression, and examples in other situations. The header shows the provider's reported input, output, and total Tokens.
+4. **Listen to the explanation**: Click **播放讲解** (Play explanation) for bilingual device narration that advances through the cards. The adjacent **语速** (Speed) control follows the app's speech setting by default; an independent 0.5×–3× setting is remembered. Changes during playback take effect on the next segment. You can stop, read the script, or return to the source video.
+5. **Review later**: Successful lessons are saved automatically. Reopen them from the global **精讲** library or the player's **精讲** sidebar tab. The library defaults to cards with a list toggle and 24 groups per page; search and course filters cover all saved lessons. Small illustrations are bundled, with no separate image generation required.
+
+### Tokens and costs
+
+| Action | Does it consume lesson Tokens? |
+| --- | --- |
+| Generate a lesson that has not been saved | **Yes.** Tutor instructions and nearby subtitle context are input; three cards and narration scripts are output. Both use your model account's quota. |
+| Click Retry after an unsuccessful analysis | A new AI request is sent and may consume more Tokens and incur additional charges. |
+| Reopen saved cards, search, filter, or change pages | **No.** These actions read local content. |
+| Play an existing narration script, change speed, or display bundled illustrations | **No.** These use device speech and bundled images, without a lesson-model request. |
+
+Your configured provider and model determine quota and billing rules. Context length and generated content affect consumption; there is no fixed price per lesson group. The header records usage actually returned by the provider. **Missing usage does not mean zero Tokens.** The screenshot shows a historical record for that particular analysis, not a fixed allowance.
+
+Changed source subtitles or surrounding context, or generating again after deleting a saved lesson, creates a new AI request. There is no background pre-generation or automatic retry. Closing cancels the client request, but provider processing already started may still be billed. AI subtitle generation is a separate service with its own provider's usage rules.
+
+Imported, AI-generated, and extractable embedded English text subtitles are supported. Embedded extraction requires local FFmpeg; bitmap and burned-in captions require imported or AI-generated subtitles first. Analysis sends only selected subtitle text and surrounding context, not video. Interpretations use subtitles alone and should be checked against the original scene; invented examples and decorative illustrations are not facts from the video.
 
 ## Why use Shadowing English
 
@@ -187,7 +222,7 @@ Read [RESOURCE_SETUP.md](RESOURCE_SETUP.md) for more detail. This repository doe
 
 - Videos, subtitles, and learning records are stored and managed around your local device.
 - The project does not host or distribute your course materials.
-- If you enable AI subtitles or translation, requests are sent to the third-party provider you configure.
+- If you enable AI subtitles, translation, or subtitle lessons, requests are sent to the third-party provider you configure.
 
 ## Contributing
 
