@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,14 +9,58 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'config/theme/theme_logic.dart';
 import 'config/theme/theme_ui_model.dart';
+import 'features/settings/presentation/app_update_provider.dart';
 import 'flavors/app_flavor.dart';
 import 'router/app_router.dart';
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  AppLifecycleListener? _lifecycleListener;
+  Timer? _updateTimer;
+  bool _checkingAutomatically = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!supportsAppUpdates) return;
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () => unawaited(_checkForUpdates()),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_checkForUpdates());
+    });
+  }
+
+  Future<void> _checkForUpdates() async {
+    if (!mounted || _checkingAutomatically) return;
+    _updateTimer?.cancel();
+    _checkingAutomatically = true;
+    try {
+      final Duration delay = await ref
+          .read(appUpdateProvider.notifier)
+          .checkAutomatically();
+      if (!mounted) return;
+      _updateTimer = Timer(delay, () => unawaited(_checkForUpdates()));
+    } finally {
+      _checkingAutomatically = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _updateTimer?.cancel();
+    _lifecycleListener?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final ThemeUiModel currentTheme = ref.watch(themeLogicProvider);
     final GoRouter router = ref.watch(goRouterProvider);
     return AnnotatedRegion<SystemUiOverlayStyle>(

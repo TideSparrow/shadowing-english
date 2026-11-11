@@ -1,14 +1,29 @@
 import 'package:common_learn_english/features/navigation/presentation/floating_bottom_nav.dart';
 import 'package:common_learn_english/features/navigation/presentation/navigation_destination.dart';
+import 'package:common_learn_english/features/settings/data/app_update_service.dart';
+import 'package:common_learn_english/features/settings/presentation/app_update_provider.dart';
+import 'package:common_learn_english/features/settings/presentation/settings_screen.dart';
 import 'package:common_learn_english/features/shared/data/daily_english_service.dart';
 import 'package:common_learn_english/features/shared/data/word_pronunciation_service.dart';
 import 'package:common_learn_english/features/shared/presentation/pad/pad_sidebar.dart';
 import 'package:common_learn_english/router/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:riverpod/src/framework.dart' show Override;
+
+class _AvailableUpdateNotifier extends AppUpdateNotifier {
+  @override
+  AppUpdateState build() => const AppUpdateState(
+    update: AppUpdate(
+      version: '0.3.1',
+      assetName: 'shadowing-english-v0.3.1-macos.dmg',
+      downloadUrl: 'https://example.com/shadowing-english-v0.3.1-macos.dmg',
+      checksumUrl: 'https://example.com/SHA256SUMS.txt',
+    ),
+  );
+}
 
 void main() {
   test('pad prototype routes stay addressable', () {
@@ -89,6 +104,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('home page'), findsOneWidget);
+    expect(find.text('NEW'), findsNothing);
     expect(
       find.byKey(const Key('pad-sidebar-growth-avatar-1')),
       findsOneWidget,
@@ -105,6 +121,45 @@ void main() {
     await tester.tap(find.byKey(const Key('pad-sidebar-growth-entry')));
     await tester.pumpAndSettle();
     expect(find.text('growth page'), findsOneWidget);
+  });
+
+  testWidgets('sidebar update badge opens the update action in settings', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final GoRouter router = GoRouter(
+      initialLocation: AppNavDestination.home.route,
+      routes: <GoRoute>[
+        GoRoute(
+          path: AppNavDestination.home.route,
+          builder: (_, _) =>
+              const Scaffold(body: PadSidebar(current: AppNavDestination.home)),
+        ),
+        GoRoute(
+          path: AppNavDestination.settings.route,
+          builder: (_, _) => const SettingsScreen(),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          appUpdateProvider.overrideWith(_AvailableUpdateNotifier.new),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('NEW'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsScreen), findsOneWidget);
+    expect(find.text('更新到 v0.3.1').hitTestable(), findsOneWidget);
   });
 
   testWidgets('pad sidebar clears the system status bar', (

@@ -51,6 +51,29 @@ class SettingsScreen extends ConsumerWidget {
       }
     });
 
+    final Widget updateAction = _ActionRow(
+      title: updateState.isChecking
+          ? '正在检查更新…'
+          : updateState.downloadedPath != null
+          ? (updateState.isInstalling
+                ? '正在打开安装包…'
+                : '安装 v${updateState.update!.version}')
+          : updateState.update == null
+          ? '检查更新'
+          : (updateState.isDownloading
+                ? _downloadTitle(updateState)
+                : '更新到 v${updateState.update!.version}'),
+      description: updateState.isDownloading
+          ? _downloadDescription(updateState)
+          : updateState.downloadedPath != null
+          ? '安装包已校验完成，点击开始安装。'
+          : updateState.update == null
+          ? '从 GitHub Release 检查当前平台的最新安装包。'
+          : '已找到适用于当前平台的安装包。',
+      icon: Icons.system_update_rounded,
+      onTap: () => _handleUpdateAction(ref, updateState),
+    );
+
     return PadScaffold(
       currentDestination: AppNavDestination.settings,
       topBar: const PadTopBar(title: '英语学习休息室', subtitle: '设置'),
@@ -74,6 +97,14 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           SizedBox(height: context.padSectionGap),
+          if (updateState.update != null) ...<Widget>[
+            SettingsGroupCard(
+              title: '应用更新',
+              icon: Icons.system_update_rounded,
+              children: <Widget>[updateAction],
+            ),
+            SizedBox(height: context.padSectionGap),
+          ],
           SettingsGroupCard(
             title: '播放',
             icon: Icons.play_circle_rounded,
@@ -570,26 +601,8 @@ class SettingsScreen extends ConsumerWidget {
             title: '系统',
             icon: Icons.settings_system_daydream_rounded,
             children: <Widget>[
-              _ActionRow(
-                title: updateState.downloadedPath != null
-                    ? (updateState.isInstalling
-                          ? '正在打开安装包…'
-                          : '安装 v${updateState.update!.version}')
-                    : updateState.update == null
-                    ? (updateState.isChecking ? '正在检查更新…' : '检查更新')
-                    : (updateState.isDownloading
-                          ? _downloadTitle(updateState)
-                          : '更新到 v${updateState.update!.version}'),
-                description: updateState.isDownloading
-                    ? _downloadDescription(updateState)
-                    : updateState.downloadedPath != null
-                    ? '安装包已校验完成，点击开始安装。'
-                    : updateState.update == null
-                    ? '从 GitHub Release 检查当前平台的最新安装包。'
-                    : '已找到适用于当前平台的安装包。',
-                icon: Icons.system_update_rounded,
-                onTap: () => _handleUpdateAction(ref, updateState),
-              ),
+              if (supportsAppUpdates && updateState.update == null)
+                updateAction,
               _ActionRow(
                 title: '管理 AI 字幕',
                 description: '查看、编辑、导出、重新生成或删除已生成的字幕。',

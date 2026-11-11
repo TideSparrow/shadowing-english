@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../growth/presentation/growth_provider.dart';
 import '../../../navigation/presentation/navigation_destination.dart';
+import '../../../settings/presentation/app_update_provider.dart';
 import '../../data/daily_english_service.dart';
 import '../../data/word_pronunciation_service.dart';
 import 'app_design_tokens.dart';
@@ -113,6 +114,9 @@ class _PadSidebarState extends ConsumerState<PadSidebar> {
   @override
   Widget build(BuildContext context) {
     final UserGrowth growth = ref.watch(userGrowthProvider);
+    final String? updateVersion = ref.watch(
+      appUpdateProvider.select((AppUpdateState state) => state.update?.version),
+    );
     final double topInset = MediaQuery.paddingOf(context).top;
     final double width = MediaQuery.sizeOf(context).width;
     final bool compact = width < 1180;
@@ -152,55 +156,86 @@ class _PadSidebarState extends ConsumerState<PadSidebar> {
                   compact ? 18 : 24,
                   14,
                 ),
-                child: Row(
-                  children: <Widget>[
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: AppDesignTokens.skyLight,
-                        borderRadius: BorderRadius.all(
-                          Radius.circular(compact ? 16 : 18),
-                        ),
-                        boxShadow: AppDesignTokens.toyCardShadow,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.all(
-                          Radius.circular(compact ? 16 : 18),
-                        ),
-                        child: SizedBox(
-                          width: compact ? 44 : 50,
-                          height: compact ? 44 : 50,
-                          child: Image.asset(
-                            'assets/img/app_icon.png',
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: compact ? 10 : 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                child: Material(
+                  color: Colors.transparent,
+                  child: Tooltip(
+                    message: updateVersion == null
+                        ? ''
+                        : '发现新版本 v$updateVersion，前往设置',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: updateVersion == null
+                          ? null
+                          : () => context.go(AppNavDestination.settings.route),
+                      child: Row(
                         children: <Widget>[
-                          Text(
-                            '语言避难所',
-                            style: TextStyle(
-                              fontSize: compact ? 16 : 18,
-                              fontWeight: FontWeight.w900,
-                              color: AppDesignTokens.brandGreenDark,
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: AppDesignTokens.skyLight,
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(compact ? 16 : 18),
+                              ),
+                              boxShadow: AppDesignTokens.toyCardShadow,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(compact ? 16 : 18),
+                              ),
+                              child: SizedBox(
+                                width: compact ? 44 : 50,
+                                height: compact ? 44 : 50,
+                                child: Image.asset(
+                                  'assets/img/app_icon.png',
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '放映室入口',
-                            style: TextStyle(
-                              fontSize: compact ? 11 : 12,
-                              color: AppDesignTokens.textSecondary,
+                          SizedBox(width: compact ? 10 : 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  '语言避难所',
+                                  style: TextStyle(
+                                    fontSize: compact ? 16 : 18,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppDesignTokens.brandGreenDark,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 6,
+                                  runSpacing: 3,
+                                  children: <Widget>[
+                                    Text(
+                                      '放映室入口',
+                                      style: TextStyle(
+                                        fontSize: compact ? 11 : 12,
+                                        color: AppDesignTokens.textSecondary,
+                                      ),
+                                    ),
+                                    if (updateVersion != null)
+                                      const Badge(
+                                        label: Text('NEW'),
+                                        backgroundColor: AppDesignTokens.yellow,
+                                        textColor: AppDesignTokens.textPrimary,
+                                        textStyle: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
               Expanded(

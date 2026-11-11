@@ -34,6 +34,8 @@ class AppUpdateService {
     final Response<List<dynamic>> response = await _dio.get<List<dynamic>>(
       _releasesUrl,
       options: Options(
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
         headers: <String, String>{
           'Accept': 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
