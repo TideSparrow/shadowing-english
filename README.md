@@ -25,6 +25,12 @@
 
 后续规划参考：[人人都能用英语 / Enjoy](https://github.com/ZuodaoTech/everyone-can-use-english)，重点研究学习方法与 AI 辅助训练流程，具体改进项见路线图。
 
+## 宣传视频
+
+<a href="https://tidesparrow.github.io/shadowing-english/media/shadowing-english-promo.mp4">
+  <img src="assets/showcase/shadowing-english-promo-cover.jpg" alt="播放 Shadowing English 宣传视频（42 秒）" width="720" />
+</a>
+
 ## 功能截图
 
 | 播放与逐句精听 | 导入本地视频与字幕 |
