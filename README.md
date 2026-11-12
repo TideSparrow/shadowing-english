@@ -25,7 +25,7 @@
 
 后续规划参考：[人人都能用英语 / Enjoy](https://github.com/ZuodaoTech/everyone-can-use-english)，重点研究学习方法与 AI 辅助训练流程，具体改进项见路线图。
 
-## 宣传视频
+## 视频简介
 
 https://github.com/user-attachments/assets/17b89c21-867e-486a-98f8-5fcb95405c43
 
