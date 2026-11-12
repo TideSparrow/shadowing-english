@@ -27,9 +27,9 @@
 
 ## 宣传视频
 
-<a href="https://tidesparrow.github.io/shadowing-english/media/shadowing-english-promo.mp4">
-  <img src="assets/showcase/shadowing-english-promo-cover.jpg" alt="播放 Shadowing English 宣传视频（42 秒）" width="720" />
-</a>
+https://github.com/user-attachments/assets/17b89c21-867e-486a-98f8-5fcb95405c43
+
+[直接打开 MP4](https://tidesparrow.github.io/shadowing-english/media/shadowing-english-promo.mp4)
 
 ## 功能截图
 
