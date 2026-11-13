@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +13,7 @@ import '../../../shared/presentation/pad/app_design_tokens.dart';
 import '../../../shared/presentation/word_lookup_popup.dart';
 import '../player_mock_state.dart';
 import '../player_native_subtitles.dart';
+import 'player_ab_timeline.dart';
 import 'subtitle_word_highlight_style.dart';
 
 class PlayerVideoPanel extends StatefulWidget {
@@ -33,6 +35,10 @@ class PlayerVideoPanel extends StatefulWidget {
     required this.speed,
     required this.isShadowing,
     required this.isLooping,
+    this.loopStartMs,
+    this.loopEndMs,
+    this.onLoopRangeChanged,
+    this.onClearLoop,
     required this.isMuted,
     required this.volumeLevel,
     required this.onTogglePlaying,
@@ -51,6 +57,7 @@ class PlayerVideoPanel extends StatefulWidget {
     this.onSelectEmbeddedSubtitle,
     required this.onToggleShadowing,
     required this.onToggleLoop,
+    this.onStartAbLoop,
     required this.onToggleMuted,
     required this.onVolumeChanged,
     required this.onToggleFullscreen,
@@ -101,6 +108,10 @@ class PlayerVideoPanel extends StatefulWidget {
   final String speed;
   final bool isShadowing;
   final bool isLooping;
+  final int? loopStartMs;
+  final int? loopEndMs;
+  final void Function(int start, int end)? onLoopRangeChanged;
+  final VoidCallback? onClearLoop;
   final bool isMuted;
   final double volumeLevel;
   final VoidCallback onTogglePlaying;
@@ -119,6 +130,7 @@ class PlayerVideoPanel extends StatefulWidget {
   final ValueChanged<SubtitleTrack?>? onSelectEmbeddedSubtitle;
   final VoidCallback onToggleShadowing;
   final VoidCallback onToggleLoop;
+  final VoidCallback? onStartAbLoop;
   final VoidCallback onToggleMuted;
   final ValueChanged<double> onVolumeChanged;
   final VoidCallback onToggleFullscreen;
@@ -168,6 +180,7 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
   static const Duration _autoHideDelay = Duration(seconds: 3);
   static const Duration _gestureHintDuration = Duration(milliseconds: 900);
 
+  final GlobalKey _controlDockKey = GlobalKey();
   Timer? _controlsTimer;
   Timer? _gestureHintTimer;
   bool _showControls = true;
@@ -398,7 +411,14 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
   void _handlePointerDown(PointerDownEvent event) {
     _keyboardFocusNode.requestFocus();
     _gestureMode = null;
-    _gestureStartLocalPosition = event.localPosition;
+    final RenderObject? dock = _controlDockKey.currentContext
+        ?.findRenderObject();
+    final bool touchingControls =
+        _showControls &&
+        dock is RenderBox &&
+        (Offset.zero & dock.size).contains(dock.globalToLocal(event.position));
+    _gestureStartLocalPosition = touchingControls ? null : event.localPosition;
+    if (touchingControls) _controlsTimer?.cancel();
     _gestureStartProgress = null;
     _gesturePreviewProgress = null;
     _gestureStartVolume = widget.volumeLevel;
@@ -544,6 +564,9 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
       ),
     );
 
+    if (widget.isFullscreen && widget.onLoopRangeChanged != null) {
+      return videoStage;
+    }
     if (widget.isFullscreen) {
       return ColoredBox(
         color: Colors.black,
@@ -566,7 +589,18 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
           ),
         ],
       ),
-      child: AspectRatio(aspectRatio: 16 / 9, child: videoStage),
+      child: widget.onLoopRangeChanged != null && hasVideoDuration
+          ? LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) =>
+                  SizedBox(
+                    height: math.min(
+                      constraints.maxHeight,
+                      math.max(280, constraints.maxWidth * 9 / 16),
+                    ),
+                    child: videoStage,
+                  ),
+            )
+          : AspectRatio(aspectRatio: 16 / 9, child: videoStage),
     );
   }
 
@@ -593,9 +627,22 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
             : (tinyControls ? 12 : 16);
         final double sceneHeaderTopInset =
             widget.sceneHeaderTopInset ?? topInset;
+        final bool compactAbControls =
+            widget.onLoopRangeChanged != null &&
+            hasVideoDuration &&
+            constraints.maxHeight < 360;
+        final bool showCenterPlay =
+            showPrimaryButton && !(compactAbControls && _showControls);
+        final double abControlsHeight =
+            widget.loopStartMs == null || widget.loopEndMs == null ? 0 : 60;
         final double subtitleBottom = _showControls
-            ? (tinyControls ? 126 : (compactControls ? 138 : 146))
+            ? (tinyControls ? 126 : (compactControls ? 138 : 146)) +
+                  abControlsHeight
             : 40;
+        final bool hasSubtitleSpace =
+            !_showControls ||
+            !compactAbControls ||
+            constraints.maxHeight > subtitleBottom + 90;
         return Focus(
           focusNode: _keyboardFocusNode,
           autofocus: true,
@@ -723,7 +770,7 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                         child: CircularProgressIndicator(color: Colors.white),
                       ),
                     ),
-                  if (overlayText != null)
+                  if (overlayText != null && hasSubtitleSpace)
                     Positioned(
                       left: widget.isFullscreen ? 40 : (tinyControls ? 18 : 24),
                       right: widget.isFullscreen
@@ -773,10 +820,10 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                     ),
                   Center(
                     child: AnimatedOpacity(
-                      opacity: showPrimaryButton ? 1 : 0,
+                      opacity: showCenterPlay ? 1 : 0,
                       duration: const Duration(milliseconds: 180),
                       child: IgnorePointer(
-                        ignoring: !showPrimaryButton,
+                        ignoring: !showCenterPlay,
                         child: _PrimaryPlayButton(
                           isPlaying: widget.isPlaying,
                           compact: compactControls,
@@ -854,6 +901,7 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                               right: dockInset,
                               bottom: widget.isFullscreen ? 22 : 18,
                               child: _ControlDock(
+                                key: _controlDockKey,
                                 compact: compactControls,
                                 tiny: tinyControls,
                                 fullscreen: widget.isFullscreen,
@@ -866,7 +914,25 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                                     ? _formatDuration(widget.videoDuration)
                                     : PlayerVideoPanel._videoPlaceholderLabel,
                                 onSeek: widget.onSeek,
+                                durationMs: widget.videoDuration.inMilliseconds,
+                                loopStartMs: widget.loopStartMs,
+                                loopEndMs: widget.loopEndMs,
+                                onLoopRangeChanged: widget.onLoopRangeChanged,
+                                onClearLoop: widget.onClearLoop,
                                 leadingButtons: <Widget>[
+                                  if (compactAbControls)
+                                    _RoundActionButton(
+                                      icon: widget.isPlaying
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded,
+                                      tooltip: widget.isPlaying ? '暂停' : '播放',
+                                      compact: compactControls,
+                                      tiny: tinyControls,
+                                      fullscreen: widget.isFullscreen,
+                                      onPressed: () => _handleControlTap(
+                                        widget.onTogglePlaying,
+                                      ),
+                                    ),
                                   _RoundActionButton(
                                     icon: Icons.skip_previous_rounded,
                                     tooltip: '上一句',
@@ -1151,17 +1217,133 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                                     onPressed: () =>
                                         _handleControlTap(widget.onToggleMuted),
                                   ),
-                                  _RoundActionButton(
-                                    icon: Icons.repeat_one_rounded,
-                                    tooltip: '单句循环',
-                                    active: widget.isLooping,
-                                    compact: compactControls,
-                                    tiny: tinyControls,
-                                    fullscreen: widget.isFullscreen,
-                                    onPressed: () =>
-                                        _handleControlTap(widget.onToggleLoop),
-                                  ),
-                                  if (widget.isFullscreen && !tinyControls)
+                                  if (widget.onStartAbLoop == null)
+                                    _RoundActionButton(
+                                      icon: Icons.repeat_one_rounded,
+                                      tooltip: '单句循环',
+                                      active: widget.isLooping,
+                                      compact: compactControls,
+                                      tiny: tinyControls,
+                                      fullscreen: widget.isFullscreen,
+                                      onPressed: () => _handleControlTap(
+                                        widget.onToggleLoop,
+                                      ),
+                                    )
+                                  else
+                                    PopupMenuButton<String>(
+                                      key: const ValueKey<String>(
+                                        'player-loop-menu',
+                                      ),
+                                      tooltip: '循环播放',
+                                      onOpened: () => _controlsTimer?.cancel(),
+                                      onCanceled: _scheduleAutoHide,
+                                      onSelected: (String action) =>
+                                          _handleControlTap(() {
+                                            if (action == 'range') {
+                                              widget.onStartAbLoop?.call();
+                                            } else if (action == 'clear') {
+                                              (widget.onClearLoop ??
+                                                  widget.onToggleLoop)();
+                                            } else {
+                                              widget.onToggleLoop();
+                                            }
+                                          }),
+                                      itemBuilder: (BuildContext context) =>
+                                          <PopupMenuEntry<String>>[
+                                            PopupMenuItem<String>(
+                                              value: 'range',
+                                              enabled: widget.totalLines > 0,
+                                              child: const ListTile(
+                                                contentPadding: EdgeInsets.zero,
+                                                leading: Icon(
+                                                  Icons.repeat_rounded,
+                                                ),
+                                                title: Text('AB 区间循环'),
+                                                subtitle: Text(
+                                                  '从当前句开始，拖动两端圆点调整范围',
+                                                ),
+                                              ),
+                                            ),
+                                            if (!widget.isLooping)
+                                              PopupMenuItem<String>(
+                                                value: 'single',
+                                                enabled: widget.totalLines > 0,
+                                                child: const ListTile(
+                                                  contentPadding:
+                                                      EdgeInsets.zero,
+                                                  leading: Icon(
+                                                    Icons.repeat_one_rounded,
+                                                  ),
+                                                  title: Text('单句循环'),
+                                                  subtitle: Text('重复播放当前这一句'),
+                                                ),
+                                              ),
+                                            if (widget.loopStartMs != null ||
+                                                widget.isLooping)
+                                              const PopupMenuItem<String>(
+                                                value: 'clear',
+                                                child: Text('退出循环'),
+                                              ),
+                                          ],
+                                      child: Container(
+                                        height: tinyControls
+                                            ? 34
+                                            : (compactControls ? 40 : 48),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                        ),
+                                        margin: const EdgeInsets.only(right: 4),
+                                        decoration: BoxDecoration(
+                                          color: widget.isLooping
+                                              ? AppDesignTokens.brandGreen
+                                              : widget.isFullscreen
+                                              ? const Color(0x33101827)
+                                              : Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            24,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: <Widget>[
+                                            Icon(
+                                              Icons.repeat_rounded,
+                                              size: 16,
+                                              color:
+                                                  widget.isFullscreen ||
+                                                      widget.isLooping
+                                                  ? Colors.white
+                                                  : AppDesignTokens
+                                                        .primaryBlueDark,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '循环',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color:
+                                                    widget.isFullscreen ||
+                                                        widget.isLooping
+                                                    ? Colors.white
+                                                    : AppDesignTokens
+                                                          .primaryBlueDark,
+                                              ),
+                                            ),
+                                            Icon(
+                                              Icons.arrow_drop_down,
+                                              size: 16,
+                                              color:
+                                                  widget.isFullscreen ||
+                                                      widget.isLooping
+                                                  ? Colors.white
+                                                  : AppDesignTokens
+                                                        .primaryBlueDark,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  if (widget.isFullscreen)
                                     _RoundActionButton(
                                       icon: widget.isSubtitlePanelOpen
                                           ? Icons.subtitles_off_rounded
@@ -1587,8 +1769,14 @@ class _ControlDock extends StatelessWidget {
     required this.currentLabel,
     required this.totalLabel,
     required this.onSeek,
+    required this.durationMs,
+    this.loopStartMs,
+    this.loopEndMs,
+    this.onLoopRangeChanged,
+    this.onClearLoop,
     required this.leadingButtons,
     required this.trailingButtons,
+    super.key,
   });
 
   final bool compact;
@@ -1599,8 +1787,19 @@ class _ControlDock extends StatelessWidget {
   final String currentLabel;
   final String totalLabel;
   final ValueChanged<double> onSeek;
+  final int durationMs;
+  final int? loopStartMs;
+  final int? loopEndMs;
+  final void Function(int start, int end)? onLoopRangeChanged;
+  final VoidCallback? onClearLoop;
   final List<Widget> leadingButtons;
   final List<Widget> trailingButtons;
+
+  Widget _seekBar() => Slider(
+    key: const ValueKey<String>('player-seek-slider'),
+    value: videoProgress.clamp(0.0, 1.0),
+    onChanged: onSeek,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1657,11 +1856,20 @@ class _ControlDock extends StatelessWidget {
                   child: Overlay.wrap(
                     alwaysSizeToContent: true,
                     clipBehavior: Clip.none,
-                    child: Slider(
-                      key: const ValueKey<String>('player-seek-slider'),
-                      value: videoProgress.clamp(0.0, 1.0),
-                      onChanged: onSeek,
-                    ),
+                    child: onLoopRangeChanged == null || durationMs <= 0
+                        ? _seekBar()
+                        : PlayerAbTimeline(
+                            seekBar: _seekBar(),
+                            durationMs: durationMs,
+                            positionMs: (videoProgress * durationMs).round(),
+                            startMs: loopStartMs,
+                            endMs: loopEndMs,
+                            onRangeChanged: onLoopRangeChanged!,
+                            onSeekPosition: (int position) =>
+                                onSeek(position / durationMs),
+                            onClear: onClearLoop!,
+                            fullscreen: fullscreen,
+                          ),
                   ),
                 ),
               ),

@@ -24,6 +24,13 @@ class PlayerTranscriptPanel extends StatefulWidget {
     required this.onDictationLine,
     required this.onAiExplain,
     this.loopingLineIndex,
+    this.isLooping = false,
+    this.loopFirstLine,
+    this.loopLastLine,
+    this.onLoopLinesSelected,
+    this.onClearLoop,
+    this.selectingLoopRange,
+    this.onLoopSelectionChanged,
     required this.isPlaying,
     required this.onTogglePlaying,
     this.episodeId,
@@ -55,6 +62,13 @@ class PlayerTranscriptPanel extends StatefulWidget {
   final ValueChanged<int> onDictationLine;
   final ValueChanged<int> onAiExplain;
   final int? loopingLineIndex;
+  final bool isLooping;
+  final int? loopFirstLine;
+  final int? loopLastLine;
+  final void Function(int first, int last)? onLoopLinesSelected;
+  final VoidCallback? onClearLoop;
+  final bool? selectingLoopRange;
+  final ValueChanged<bool>? onLoopSelectionChanged;
   final bool isPlaying;
   final VoidCallback onTogglePlaying;
   final String? episodeId;
@@ -75,11 +89,65 @@ class _PlayerTranscriptPanelState extends State<PlayerTranscriptPanel> {
   bool _showLessons = false;
 
   @override
+  void didUpdateWidget(covariant PlayerTranscriptPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((widget.selectingLoopRange ?? false) &&
+        !(oldWidget.selectingLoopRange ?? false)) {
+      _showLessons = false;
+      _showCurrentOnly = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         _PanelHeader(
+          loopControl:
+              widget.onLoopLinesSelected == null ||
+                  widget.lines.isEmpty ||
+                  widget.onLoopSelectionChanged == null
+              ? null
+              : TextButton.icon(
+                  key: const ValueKey<String>('subtitle-select-loop-range'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    textStyle: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    minimumSize: const Size(0, 36),
+                  ),
+                  onPressed: () {
+                    final bool selecting = widget.selectingLoopRange ?? false;
+                    if (selecting) {
+                      widget.onLoopSelectionChanged!(false);
+                    } else if (widget.isLooping ||
+                        widget.loopFirstLine != null) {
+                      widget.onClearLoop?.call();
+                    } else {
+                      setState(() {
+                        _showLessons = false;
+                        _showCurrentOnly = false;
+                      });
+                      widget.onLoopSelectionChanged!(true);
+                    }
+                  },
+                  icon: Icon(
+                    (widget.selectingLoopRange ?? false)
+                        ? Icons.check_rounded
+                        : Icons.repeat_rounded,
+                    size: 16,
+                  ),
+                  label: Text(
+                    (widget.selectingLoopRange ?? false)
+                        ? '完成选择'
+                        : widget.isLooping || widget.loopFirstLine != null
+                        ? '退出循环'
+                        : '选择循环区间',
+                  ),
+                ),
           showCurrentOnly: _showCurrentOnly,
           showLessons: _showLessons,
           onLessonsSelected: widget.lessonPanel == null
@@ -118,6 +186,14 @@ class _PlayerTranscriptPanelState extends State<PlayerTranscriptPanel> {
                   onDictationLine: widget.onDictationLine,
                   onAiExplain: widget.onAiExplain,
                   loopingLineIndex: widget.loopingLineIndex,
+                  isLooping: widget.isLooping,
+                  loopFirstLine: widget.loopFirstLine,
+                  loopLastLine: widget.loopLastLine,
+                  onLoopLinesSelected: widget.onLoopLinesSelected,
+                  onClearLoop: widget.onClearLoop,
+                  showLoopControl: widget.onLoopSelectionChanged == null,
+                  selectingLoopRange: widget.selectingLoopRange,
+                  onLoopSelectionChanged: widget.onLoopSelectionChanged,
                   isPlaying: widget.isPlaying,
                   onTogglePlaying: widget.onTogglePlaying,
                   onPronounce: widget.onPronounce,
@@ -140,11 +216,13 @@ class _PanelHeader extends StatelessWidget {
     required this.onViewChanged,
     required this.showLessons,
     this.onLessonsSelected,
+    this.loopControl,
   });
   final bool showCurrentOnly;
   final ValueChanged<bool> onViewChanged;
   final bool showLessons;
   final VoidCallback? onLessonsSelected;
+  final Widget? loopControl;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -159,13 +237,20 @@ class _PanelHeader extends StatelessWidget {
         final Widget heading = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              showLessons ? '本集精讲' : '逐句精听',
-              style: const TextStyle(
-                color: AppDesignTokens.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    showLessons ? '本集精讲' : '逐句精听',
+                    style: const TextStyle(
+                      color: AppDesignTokens.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (loopControl != null) loopControl!,
+              ],
             ),
             const SizedBox(height: 4),
             Text(

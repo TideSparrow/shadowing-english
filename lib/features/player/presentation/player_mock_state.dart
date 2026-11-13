@@ -82,11 +82,165 @@ class PlayerMockState {
   Map<String, String> generatedWordDefinitions = const <String, String>{};
   int activeLineIndex;
   int currentWordIndex = 0;
-  int subtitleDelayMs = 0;
+  int _subtitleDelayMs = 0;
+  int get subtitleDelayMs => _subtitleDelayMs;
+  set subtitleDelayMs(int value) {
+    _subtitleDelayMs = value;
+    _validateLoopBounds();
+  }
+
   int positionMs;
   String speed = '0.8×';
   bool isPlaying = false;
-  bool isLooping = false;
+  bool _isLooping = false;
+  int? _loopStartMs;
+  int? _loopEndMs;
+  int? _loopFirstLine;
+  int? _loopLastLine;
+  int _videoDurationMs = 0;
+  int get videoDurationMs => _videoDurationMs;
+  set videoDurationMs(int value) {
+    _videoDurationMs = max(0, value);
+    if (_loopStartMs != null) _loopStartMs = _boundTime(_loopStartMs!);
+    if (_loopEndMs != null) _loopEndMs = _boundTime(_loopEndMs!);
+    _validateLoopBounds();
+  }
+
+  void _validateLoopBounds() {
+    final int? start = loopStartMs;
+    final int? end = loopEndMs;
+    if (start != null && end != null && end <= start) clearLoop();
+  }
+
+  bool isSelectingLoopRange = false;
+  bool resourcesLoaded = false;
+  bool usingAiSubtitles = false;
+
+  bool get isLooping => _isLooping;
+  set isLooping(bool value) {
+    _isLooping = value;
+    if (!value) {
+      _loopStartMs = null;
+      _loopEndMs = null;
+      _loopFirstLine = null;
+      _loopLastLine = null;
+    }
+  }
+
+  int _boundTime(int value) =>
+      videoDurationMs > 0 ? value.clamp(0, videoDurationMs) : max(0, value);
+
+  int? get loopStartMs => _loopFirstLine != null
+      ? _boundTime(videoStartMsForLine(_loopFirstLine!))
+      : _loopStartMs;
+  int? get loopEndMs => _loopLastLine != null
+      ? _boundTime(videoEndMsForLine(_loopLastLine!))
+      : _loopEndMs;
+
+  // Coverage is derived from time, so manual AB edits and subtitle selection
+  // always describe the same contiguous interval (including subtitle gaps).
+  ({int first, int last})? get loopLineRange {
+    final int? start = loopStartMs;
+    final int? end = loopEndMs;
+    if (start == null || end == null) return null;
+    int? first;
+    int? last;
+    for (int i = 0; i < lines.length; i++) {
+      if (videoEndMsForLine(i) > start && videoStartMsForLine(i) < end) {
+        first ??= i;
+        last = i;
+      }
+    }
+    return first == null ? null : (first: first, last: last!);
+  }
+
+  void clearLoop() => isLooping = false;
+
+  void startAbLoop() {
+    if (!hasLines) return;
+    final int start = videoStartMsForLine(activeLineIndex);
+    final int end = videoDurationMs > 0
+        ? min(start + 120000, videoDurationMs)
+        : min(start + 120000, videoEndMsForLine(lines.length - 1));
+    setLoopRange(start, end);
+    isSelectingLoopRange = false;
+  }
+
+  /// User-driven handle edits preview the boundary without starting playback.
+  int? previewLoopRange(int startMs, int endMs) {
+    final bool movedStart = startMs != loopStartMs;
+    if (!setLoopRange(startMs, endMs)) return null;
+    isPlaying = false;
+    // B is exclusive: preview the last instant inside the selected segment.
+    final int target = movedStart ? loopStartMs! : loopEndMs! - 1;
+    syncWithTimestamp(target);
+    return target;
+  }
+
+  int? exitLoopAtStart() {
+    final int? start = loopStartMs;
+    clearLoop();
+    isSelectingLoopRange = false;
+    if (start != null) syncWithTimestamp(start);
+    return start;
+  }
+
+  void setLoopStart(int milliseconds) {
+    final int start = _boundTime(milliseconds);
+    final int? end = loopEndMs;
+    clearLoop();
+    _loopStartMs = start;
+    if (end != null && end > start) {
+      _loopEndMs = end;
+      _isLooping = true;
+    }
+  }
+
+  bool setLoopEnd(int milliseconds) {
+    final int? start = loopStartMs;
+    if (start == null) return false;
+    return setLoopRange(start, milliseconds);
+  }
+
+  bool setLoopRange(int startMs, int endMs) {
+    final int start = _boundTime(startMs);
+    final int end = _boundTime(endMs);
+    if (end <= start) return false;
+    clearLoop();
+    _loopStartMs = start;
+    _loopEndMs = end;
+    _isLooping = true;
+    return true;
+  }
+
+  bool setLoopLines(int first, int last) {
+    if (first < 0 ||
+        last < 0 ||
+        first >= lines.length ||
+        last >= lines.length) {
+      return false;
+    }
+    final int start = min(first, last);
+    final int end = max(first, last);
+    if (!setLoopRange(videoStartMsForLine(start), videoEndMsForLine(end))) {
+      return false;
+    }
+    _loopFirstLine = start;
+    _loopLastLine = end;
+    return true;
+  }
+
+  int constrainToLoop(int milliseconds) {
+    final int? start = loopStartMs;
+    final int? end = loopEndMs;
+    if (!isLooping || start == null || end == null) return milliseconds;
+    return milliseconds.clamp(start, max(start, end - 1));
+  }
+
+  void leaveLoopIfOutside(int milliseconds) {
+    if (isLooping && constrainToLoop(milliseconds) != milliseconds) clearLoop();
+  }
+
   bool isShadowing = false;
   String subtitleMode = '双语';
 
@@ -157,6 +311,11 @@ class PlayerMockState {
 
     final int lineIncrement = max(1, (playbackRate * _tickStepMs).round());
     positionMs += lineIncrement;
+    if (restartLoopAtTimestamp(positionMs)) return true;
+    if (isLooping && loopStartMs != null) {
+      syncWithTimestamp(positionMs);
+      return true;
+    }
 
     if (!hasLines) {
       isPlaying = false;
@@ -192,6 +351,7 @@ class PlayerMockState {
     if (index < 0 || index >= lines.length) {
       return;
     }
+    leaveLoopIfOutside(videoStartMsForLine(index));
     activeLineIndex = index;
     positionMs = videoStartMsForLine(activeLineIndex);
     currentWordIndex = 0;
@@ -203,19 +363,23 @@ class PlayerMockState {
   }
 
   void toggleLoop() {
-    isLooping = !isLooping;
+    if (isLooping) {
+      clearLoop();
+    } else if (hasLines) {
+      setLoopLines(activeLineIndex, activeLineIndex);
+    }
   }
 
   bool toggleLineLoopAt(int index) {
     if (index < 0 || index >= lines.length) {
       return isLooping;
     }
-    if (isLooping && activeLineIndex == index) {
+    if (isLooping && loopLineRange == (first: index, last: index)) {
       isLooping = false;
       return false;
     }
     selectLine(index);
-    isLooping = true;
+    setLoopLines(index, index);
     isPlaying = true;
     return true;
   }
@@ -239,6 +403,7 @@ class PlayerMockState {
     if (activeLineIndex == 0) {
       return;
     }
+    leaveLoopIfOutside(videoStartMsForLine(activeLineIndex - 1));
     activeLineIndex -= 1;
     positionMs = videoStartMsForLine(activeLineIndex);
     currentWordIndex = 0;
@@ -249,6 +414,7 @@ class PlayerMockState {
     if (activeLineIndex >= lines.length - 1) {
       return;
     }
+    leaveLoopIfOutside(videoStartMsForLine(activeLineIndex + 1));
     activeLineIndex += 1;
     positionMs = videoStartMsForLine(activeLineIndex);
     currentWordIndex = 0;
@@ -260,6 +426,7 @@ class PlayerMockState {
     String? initialStartTime,
     Map<String, String> wordDefinitions = const <String, String>{},
   }) {
+    clearLoop();
     final List<PlayerSubtitleLine> validLines = loadedLines
         .where((PlayerSubtitleLine line) => line.endMs > line.startMs)
         .toList(growable: false);
@@ -303,6 +470,7 @@ class PlayerMockState {
   }
 
   bool seekToMilliseconds(int milliseconds) {
+    leaveLoopIfOutside(milliseconds);
     if (!hasLines) {
       return false;
     }
@@ -341,13 +509,15 @@ class PlayerMockState {
   }
 
   bool restartLoopAtTimestamp(int milliseconds) {
-    if (!isLooping ||
-        !hasLines ||
-        milliseconds < videoEndMsForLine(activeLineIndex)) {
+    if (!isLooping) return false;
+    final int? start =
+        loopStartMs ?? (hasLines ? videoStartMsForLine(activeLineIndex) : null);
+    final int? end =
+        loopEndMs ?? (hasLines ? videoEndMsForLine(activeLineIndex) : null);
+    if (start == null || end == null || end <= start || milliseconds < end) {
       return false;
     }
-    positionMs = videoStartMsForLine(activeLineIndex);
-    _syncCurrentWordIndex(forceLineStart: true);
+    syncWithTimestamp(start);
     return true;
   }
 

@@ -39,6 +39,11 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
     this.onSelectEmbeddedSubtitle,
     required this.onToggleShadowing,
     required this.onToggleLoop,
+    this.onLoopRangeChanged,
+    this.onClearLoop,
+    this.onLoopLinesSelected,
+    this.onStartAbLoop,
+    this.onLoopSelectionChanged,
     required this.onToggleMuted,
     required this.onVolumeChanged,
     required this.onSubtitleLookupOpen,
@@ -91,6 +96,11 @@ class PlayerFullscreenVideoScreen extends StatefulWidget {
   final ValueChanged<SubtitleTrack?>? onSelectEmbeddedSubtitle;
   final VoidCallback onToggleShadowing;
   final VoidCallback onToggleLoop;
+  final void Function(int start, int end)? onLoopRangeChanged;
+  final VoidCallback? onClearLoop;
+  final void Function(int first, int last)? onLoopLinesSelected;
+  final VoidCallback? onStartAbLoop;
+  final ValueChanged<bool>? onLoopSelectionChanged;
   final VoidCallback onToggleMuted;
   final ValueChanged<double> onVolumeChanged;
   final VoidCallback onSubtitleLookupOpen;
@@ -201,9 +211,15 @@ class _PlayerFullscreenVideoScreenState
     final bool showEpisodePanel =
         _showEpisodePanel && widget.episodes.isNotEmpty;
     final bool showSubtitlePanel = _showSubtitlePanel && player.hasLines;
+    final Size screenSize = MediaQuery.sizeOf(context);
+    final bool bottomSubtitlePanel =
+        showSubtitlePanel && screenSize.width < 700;
+    final double subtitlePanelHeight = bottomSubtitlePanel
+        ? screenSize.height * 0.48
+        : 0;
     final double rightInset = showEpisodePanel
         ? _episodePanelWidth + _episodePanelGap + 12
-        : showSubtitlePanel
+        : showSubtitlePanel && !bottomSubtitlePanel
         ? _subtitlePanelWidth + _episodePanelGap + 12
         : 0;
     return Scaffold(
@@ -215,7 +231,7 @@ class _PlayerFullscreenVideoScreenState
             curve: Curves.easeOutCubic,
             left: 0,
             top: 0,
-            bottom: 0,
+            bottom: subtitlePanelHeight,
             right: rightInset,
             child: PlayerVideoPanel(
               episodeId: widget.activeEpisodeId,
@@ -245,6 +261,13 @@ class _PlayerFullscreenVideoScreenState
                   widget.subtitleWordHighlightBorderWidth,
               isShadowing: player.isShadowing,
               isLooping: player.isLooping,
+              loopStartMs: player.loopStartMs,
+              loopEndMs: player.loopEndMs,
+              onLoopRangeChanged: widget.onLoopRangeChanged == null
+                  ? null
+                  : (int start, int end) =>
+                        _refresh(() => widget.onLoopRangeChanged!(start, end)),
+              onClearLoop: () => _refresh(() => widget.onClearLoop?.call()),
               isMuted: _isMuted,
               volumeLevel: _volumeLevel,
               onTogglePlaying: () => _refresh(widget.onTogglePlaying),
@@ -277,6 +300,9 @@ class _PlayerFullscreenVideoScreenState
               }),
               onToggleShadowing: () => _refresh(widget.onToggleShadowing),
               onToggleLoop: () => _refresh(widget.onToggleLoop),
+              onStartAbLoop: widget.onStartAbLoop == null
+                  ? null
+                  : () => _refresh(widget.onStartAbLoop!),
               onToggleMuted: () {
                 widget.onToggleMuted();
                 setState(() {
@@ -383,10 +409,15 @@ class _PlayerFullscreenVideoScreenState
             AnimatedPositioned(
               duration: const Duration(milliseconds: 240),
               curve: Curves.easeOutCubic,
-              top: 0,
-              right: 12,
+              top: bottomSubtitlePanel
+                  ? screenSize.height - subtitlePanelHeight
+                  : 0,
+              right: bottomSubtitlePanel ? 0 : 12,
               bottom: 0,
               child: _FullscreenSubtitlePanel(
+                width: bottomSubtitlePanel
+                    ? screenSize.width
+                    : _subtitlePanelWidth,
                 episodeId: widget.activeEpisodeId,
                 player: player,
                 fontScale: _fontScale,
@@ -401,6 +432,17 @@ class _PlayerFullscreenVideoScreenState
                 onCollectWordAtTime: widget.onCollectWordAtTime,
                 onFavoriteWord: widget.onFavoriteWord,
                 onBookmarkLine: widget.onBookmarkLine,
+                onLoopLinesSelected: widget.onLoopLinesSelected == null
+                    ? null
+                    : (int first, int last) => _refresh(
+                        () => widget.onLoopLinesSelected!(first, last),
+                      ),
+                onClearLoop: () => _refresh(() => widget.onClearLoop?.call()),
+                onLoopSelectionChanged: widget.onLoopSelectionChanged == null
+                    ? null
+                    : (bool selecting) => _refresh(
+                        () => widget.onLoopSelectionChanged!(selecting),
+                      ),
                 onLoopFromLine: (int index) =>
                     _refresh(() => widget.onLoopFromLine(index)),
                 onDictationLine: widget.onDictationLine,
@@ -442,6 +484,7 @@ const double _subtitlePanelWidth = 390;
 
 class _FullscreenSubtitlePanel extends StatelessWidget {
   const _FullscreenSubtitlePanel({
+    required this.width,
     required this.episodeId,
     required this.player,
     required this.subtitleLetterCase,
@@ -455,6 +498,9 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
     this.onFavoriteWord,
     required this.onBookmarkLine,
     required this.onLoopFromLine,
+    this.onLoopLinesSelected,
+    this.onClearLoop,
+    this.onLoopSelectionChanged,
     required this.onDictationLine,
     required this.onAiExplain,
     this.onRegenerateAiLine,
@@ -464,6 +510,7 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
     required this.onPronounce,
   });
 
+  final double width;
   final String episodeId;
   final PlayerMockState player;
   final String subtitleLetterCase;
@@ -477,6 +524,9 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
   final ValueChanged<String>? onFavoriteWord;
   final ValueChanged<int> onBookmarkLine;
   final ValueChanged<int> onLoopFromLine;
+  final void Function(int first, int last)? onLoopLinesSelected;
+  final VoidCallback? onClearLoop;
+  final ValueChanged<bool>? onLoopSelectionChanged;
   final ValueChanged<int> onDictationLine;
   final ValueChanged<int> onAiExplain;
   final Future<void> Function(int index)? onRegenerateAiLine;
@@ -488,7 +538,7 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: _subtitlePanelWidth,
+      width: width,
       padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
         color: Color(0xFFF8FAFC),
@@ -513,13 +563,22 @@ class _FullscreenSubtitlePanel extends StatelessWidget {
           onFavoriteWord: onFavoriteWord,
           onBookmarkLine: onBookmarkLine,
           onLoopFromLine: onLoopFromLine,
+          isLooping: player.isLooping,
+          loopFirstLine: player.loopLineRange?.first,
+          loopLastLine: player.loopLineRange?.last,
+          onLoopLinesSelected: onLoopLinesSelected,
+          onClearLoop: onClearLoop,
+          selectingLoopRange: onLoopSelectionChanged == null
+              ? null
+              : player.isSelectingLoopRange,
+          onLoopSelectionChanged: onLoopSelectionChanged,
           onDictationLine: onDictationLine,
           onAiExplain: onAiExplain,
           onAssessLine: onAssessLine,
           pronunciationUnavailableReasonForLine:
               pronunciationUnavailableReasonForLine,
           onRegenerateAiLine: onRegenerateAiLine,
-          loopingLineIndex: player.isLooping ? player.activeLineIndex : null,
+          loopingLineIndex: player.loopLineRange?.first,
           isPlaying: player.isPlaying,
           onTogglePlaying: onTogglePlaying,
           onPronounce: onPronounce,

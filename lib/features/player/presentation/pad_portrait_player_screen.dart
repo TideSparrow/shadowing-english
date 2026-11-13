@@ -54,6 +54,7 @@ import 'widgets/pronunciation_assessment_dialog.dart';
 class PadPortraitPlayerScreen extends ConsumerStatefulWidget {
   const PadPortraitPlayerScreen({
     required this.episodeId,
+    this.playerState,
     this.initialStartTime,
     this.autoPlay = false,
     this.autoOpenFullscreen = false,
@@ -61,6 +62,7 @@ class PadPortraitPlayerScreen extends ConsumerStatefulWidget {
   });
 
   final String episodeId;
+  final PlayerMockState? playerState;
   final String? initialStartTime;
   final bool autoPlay;
   final bool autoOpenFullscreen;
@@ -92,6 +94,8 @@ class _PadPortraitPlayerScreenState
   bool _videoLoading = false;
   bool _isBootstrapping = true;
   bool _videoIsPlaying = false;
+  bool _loopSeekPending = false;
+  int? _queuedLoopSeekMs;
   Duration _videoDuration = Duration.zero;
   Duration _videoPosition = Duration.zero;
   String? _videoErrorText;
@@ -108,7 +112,8 @@ class _PadPortraitPlayerScreenState
   String? _aiSubtitleProgressText;
   String? _aiSubtitlePreviewText;
   String? _aiSubtitleErrorText;
-  bool _usingAiSubtitles = false;
+  bool get _usingAiSubtitles => state.usingAiSubtitles;
+  set _usingAiSubtitles(bool value) => state.usingAiSubtitles = value;
   List<SubtitleTrack> _embeddedSubtitleTracks = const <SubtitleTrack>[];
   String? _selectedEmbeddedSubtitleId;
   List<PlayerSubtitleLine> _referenceSubtitleLines =
@@ -118,7 +123,9 @@ class _PadPortraitPlayerScreenState
   void initState() {
     super.initState();
     _releaseGraphicsCache = PlayerGraphicsCache.acquire();
-    state = PlayerMockState(initialStartTime: widget.initialStartTime);
+    state =
+        widget.playerState ??
+        PlayerMockState(initialStartTime: widget.initialStartTime);
     _syncSettingsToState(ref.read(learningSettingsProvider));
     ref.listenManual<String>(
       learningSettingsProvider.select(
@@ -190,10 +197,14 @@ class _PadPortraitPlayerScreenState
     }
 
     setState(() {
-      state
-        ..loadLines(resolvedLines, initialStartTime: initialStartTime)
-        ..isPlaying = widget.autoPlay && (_videoAsset?.isNotEmpty ?? false);
-      _usingAiSubtitles = false;
+      // Keep the same playback and AB selection when the layout rotates.
+      if (!state.resourcesLoaded) {
+        state
+          ..loadLines(resolvedLines, initialStartTime: initialStartTime)
+          ..isPlaying = widget.autoPlay && (_videoAsset?.isNotEmpty ?? false)
+          ..resourcesLoaded = true;
+        _usingAiSubtitles = false;
+      }
       _referenceSubtitleLines = resolvedLines;
     });
     if (resource.episode != null) {
@@ -261,6 +272,7 @@ class _PadPortraitPlayerScreenState
 
       _videoDuration = player.state.duration;
       _videoPosition = player.state.position;
+      state.videoDurationMs = _videoDuration.inMilliseconds;
       _syncVideoAspectRatio(player.state.width, player.state.height);
       if (initialPositionMs > 0) {
         await player.seek(Duration(milliseconds: initialPositionMs));
@@ -417,6 +429,7 @@ class _PadPortraitPlayerScreenState
       }
       setState(() {
         _videoDuration = duration;
+        state.videoDurationMs = duration.inMilliseconds;
       });
     });
     _videoPlayingSubscription = player.stream.playing.listen((bool playing) {
@@ -425,7 +438,11 @@ class _PadPortraitPlayerScreenState
     _videoCompletedSubscription = player.stream.completed.listen((
       bool completed,
     ) {
-      if (completed) {
+      if (completed && state.isLooping && state.isPlaying) {
+        if (!_loopSeekPending && state.loopStartMs != null) {
+          unawaited(_seekLoopStart(resume: true));
+        }
+      } else if (completed) {
         _stopVideo();
       }
     });
@@ -473,7 +490,7 @@ class _PadPortraitPlayerScreenState
   }
 
   void _onVideoProgress(Duration position) {
-    if (!mounted) {
+    if (!mounted || _loopSeekPending) {
       return;
     }
 
@@ -483,7 +500,9 @@ class _PadPortraitPlayerScreenState
 
     setState(() {
       _videoPosition = position;
-      loopRestarted = state.restartLoopAtTimestamp(position.inMilliseconds);
+      loopRestarted =
+          state.isPlaying &&
+          state.restartLoopAtTimestamp(position.inMilliseconds);
       if (loopRestarted) {
         _videoPosition = Duration(milliseconds: state.positionMs);
       } else {
@@ -507,7 +526,7 @@ class _PadPortraitPlayerScreenState
 
     if (loopRestarted) {
       _lastTrackedVideoPosition = Duration(milliseconds: state.positionMs);
-      unawaited(_videoPlayer?.seek(_videoPosition));
+      unawaited(_seekLoopStart(resume: state.isPlaying));
       return;
     }
 
@@ -518,6 +537,100 @@ class _PadPortraitPlayerScreenState
 
     if (!state.hasLines) {
       return;
+    }
+  }
+
+  Future<void> _seekLoopStart({bool resume = false, int? targetMs}) async {
+    final Player? player = _videoPlayer;
+    final int? start = targetMs ?? state.loopStartMs;
+    if (start == null) return;
+    if (_loopSeekPending) {
+      _queuedLoopSeekMs = start;
+      return;
+    }
+    _loopSeekPending = true;
+    try {
+      state.syncWithTimestamp(start);
+      _videoPosition = Duration(milliseconds: start);
+      _lastTrackedVideoPosition = _videoPosition;
+      if (!state.isPlaying) await player?.pause();
+      await player?.seek(_videoPosition);
+      if (mounted &&
+          identical(player, _videoPlayer) &&
+          resume &&
+          state.isPlaying) {
+        await player?.play();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(state.clearLoop);
+        _showMessage('循环定位失败，请重新设置 AB 点');
+      }
+    } finally {
+      _loopSeekPending = false;
+      if (mounted) {
+        setState(() {});
+        final int? queued = _queuedLoopSeekMs;
+        _queuedLoopSeekMs = null;
+        if (queued != null && identical(player, _videoPlayer)) {
+          unawaited(_seekLoopStart(targetMs: queued, resume: state.isPlaying));
+        } else {
+          _syncLoopPlayback();
+        }
+      }
+    }
+  }
+
+  void _syncLoopPlayback() {
+    _syncTranscriptReader();
+    if (state.isLooping &&
+        state.constrainToLoop(state.positionMs) != state.positionMs) {
+      unawaited(_seekLoopStart(resume: state.isPlaying));
+    }
+  }
+
+  void _handleStartAbLoop() {
+    setState(state.startAbLoop);
+    _syncLoopPlayback();
+  }
+
+  void _handleLoopRangeChanged(int start, int end) {
+    int? target;
+    setState(() => target = state.previewLoopRange(start, end));
+    if (target == null) return;
+    _videoPosition = Duration(milliseconds: target!);
+    PlayerSystemMediaControls.updatePlaybackState(isPlaying: false);
+    _syncTranscriptReader();
+    unawaited(_seekLoopStart(targetMs: target));
+  }
+
+  void _handleLoopLinesSelected(int first, int last) {
+    setState(() => state.setLoopLines(first, last));
+    _syncLoopPlayback();
+  }
+
+  void _handleLoopSelectionChanged(bool selecting) {
+    setState(() {
+      state.isSelectingLoopRange = selecting;
+      if (selecting) {
+        state.isPlaying = false;
+        if (state.subtitleMode == '隐藏') {
+          state.setSubtitleMode(state.availableSubtitleModes.first);
+        }
+      }
+    });
+    if (selecting) {
+      unawaited(_videoPlayer?.pause());
+      PlayerSystemMediaControls.updatePlaybackState(isPlaying: false);
+    }
+  }
+
+  void _handleClearLoop() {
+    int? start;
+    setState(() => start = state.exitLoopAtStart());
+    _syncTranscriptReader();
+    if (start != null) {
+      unawaited(_seekLoopStart(targetMs: start, resume: state.isPlaying));
     }
   }
 
@@ -652,9 +765,9 @@ class _PadPortraitPlayerScreenState
       if (_videoDuration.inMilliseconds > 0) {
         final int targetMs = (_videoDuration.inMilliseconds * safeProgress)
             .round();
-        if (state.hasLines) {
-          state.seekToMilliseconds(targetMs);
-        }
+        state
+          ..leaveLoopIfOutside(targetMs)
+          ..syncWithTimestamp(targetMs);
         _lastTrackedVideoPosition = Duration(milliseconds: targetMs);
         if (_videoPlayer != null) {
           unawaited(_videoPlayer!.seek(Duration(milliseconds: targetMs)));
@@ -705,7 +818,7 @@ class _PadPortraitPlayerScreenState
       subtitleLetterCase: ref.read(learningSettingsProvider).subtitleLetterCase,
       lineIndex: state.activeLineIndex,
       wordIndex: state.currentWordIndex,
-      loopingLineIndex: state.isLooping ? state.activeLineIndex : null,
+      loopingLineIndex: state.loopLineRange?.first,
     );
   }
 
@@ -723,7 +836,7 @@ class _PadPortraitPlayerScreenState
           lines: state.lines,
           activeLineIndex: state.activeLineIndex,
           currentWordIndex: state.currentWordIndex,
-          loopingLineIndex: state.isLooping ? state.activeLineIndex : null,
+          loopingLineIndex: state.loopLineRange?.first,
           generatedMeanings: state.generatedWordDefinitions,
           dictionary: ref.read(offlineWordDictionaryProvider),
         );
@@ -882,6 +995,8 @@ class _PadPortraitPlayerScreenState
                             settings.subtitleWordHighlightBorderWidth,
                         isShadowing: state.isShadowing,
                         isLooping: state.isLooping,
+                        loopStartMs: state.loopStartMs,
+                        loopEndMs: state.loopEndMs,
                         isMuted: _isMuted,
                         volumeLevel: _volumeLevel,
                         onTogglePlaying: _handleTogglePlaying,
@@ -905,6 +1020,9 @@ class _PadPortraitPlayerScreenState
                         onSelectEmbeddedSubtitle: _handleSelectEmbeddedSubtitle,
                         onToggleShadowing: _handleToggleShadowing,
                         onToggleLoop: _handleToggleLoop,
+                        onStartAbLoop: _handleStartAbLoop,
+                        onLoopRangeChanged: _handleLoopRangeChanged,
+                        onClearLoop: _handleClearLoop,
                         onToggleMuted: _handleToggleMuted,
                         onVolumeChanged: _handleVolumeChanged,
                         onSubtitleLookupOpen: _stopVideo,
@@ -982,14 +1100,21 @@ class _PadPortraitPlayerScreenState
                                   onBookmarkLine: (int index) =>
                                       _handleBookmarkLine(index, courseContext),
                                   onLoopFromLine: _handleLoopFromLine,
+                                  onLoopLinesSelected: _handleLoopLinesSelected,
+                                  onLoopSelectionChanged:
+                                      _handleLoopSelectionChanged,
+                                  selectingLoopRange:
+                                      state.isSelectingLoopRange,
+                                  isLooping: state.isLooping,
+                                  loopFirstLine: state.loopLineRange?.first,
+                                  loopLastLine: state.loopLineRange?.last,
+                                  onClearLoop: _handleClearLoop,
                                   onDictationLine: _handleDictationLine,
                                   onAiExplain: _handleAiExplain,
                                   onAssessLine: _handleAssessLine,
                                   pronunciationUnavailableReasonForLine:
                                       _pronunciationUnavailableReasonForLine,
-                                  loopingLineIndex: state.isLooping
-                                      ? state.activeLineIndex
-                                      : null,
+                                  loopingLineIndex: state.loopLineRange?.first,
                                   isPlaying: state.isPlaying,
                                   onTogglePlaying: _handleTogglePlaying,
                                   onPronounce: _stopVideo,
@@ -1150,9 +1275,14 @@ class _PadPortraitPlayerScreenState
   }
 
   void _handleToggleLoop() {
+    if (state.isLooping) {
+      _handleClearLoop();
+      _showMessage('已退出循环');
+      return;
+    }
     setState(state.toggleLoop);
     _syncTranscriptReader();
-    _showMessage(state.isLooping ? '已开启单句循环' : '已关闭单句循环');
+    _showMessage(state.isLooping ? '已开启单句循环' : '已退出循环');
     if (state.isLooping && state.hasLines) {
       _seekToActiveLine();
     }
@@ -1715,6 +1845,9 @@ class _PadPortraitPlayerScreenState
             onSelectEmbeddedSubtitle: _handleSelectEmbeddedSubtitle,
             onToggleShadowing: _handleToggleShadowing,
             onToggleLoop: _handleToggleLoop,
+            onStartAbLoop: _handleStartAbLoop,
+            onLoopRangeChanged: _handleLoopRangeChanged,
+            onClearLoop: _handleClearLoop,
             onToggleMuted: _handleToggleMuted,
             onVolumeChanged: _handleVolumeChanged,
             onSubtitleLookupOpen: _stopVideo,
@@ -1726,6 +1859,8 @@ class _PadPortraitPlayerScreenState
             onBookmarkLine: (int index) =>
                 _handleBookmarkLine(index, courseContext),
             onLoopFromLine: _handleLoopFromLine,
+            onLoopLinesSelected: _handleLoopLinesSelected,
+            onLoopSelectionChanged: _handleLoopSelectionChanged,
             onDictationLine: _handleDictationLine,
             onAiExplain: _handleAiExplain,
             onRegenerateAiLine: _usingAiSubtitles

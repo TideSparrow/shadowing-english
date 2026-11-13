@@ -31,6 +31,14 @@ class PlayerSubtitleList extends StatefulWidget {
     required this.onDictationLine,
     required this.onAiExplain,
     this.loopingLineIndex,
+    this.isLooping = false,
+    this.loopFirstLine,
+    this.loopLastLine,
+    this.onLoopLinesSelected,
+    this.onClearLoop,
+    this.selectingLoopRange,
+    this.showLoopControl = true,
+    this.onLoopSelectionChanged,
     this.isPlaying = false,
     this.onTogglePlaying,
     this.episodeId,
@@ -69,6 +77,14 @@ class PlayerSubtitleList extends StatefulWidget {
   final ValueChanged<int> onDictationLine;
   final ValueChanged<int> onAiExplain;
   final int? loopingLineIndex;
+  final bool isLooping;
+  final int? loopFirstLine;
+  final int? loopLastLine;
+  final void Function(int first, int last)? onLoopLinesSelected;
+  final VoidCallback? onClearLoop;
+  final bool? selectingLoopRange;
+  final bool showLoopControl;
+  final ValueChanged<bool>? onLoopSelectionChanged;
   final bool isPlaying;
   final VoidCallback? onTogglePlaying;
   final String? episodeId;
@@ -98,13 +114,42 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
   bool _autoFollowCurrentLine = true;
   int? _regeneratingAiLineIndex;
 
-  bool get _showCurrentOnly => widget.showCurrentOnly;
+  bool _localSelectingLoop = false;
+  bool get _selectingLoop => widget.selectingLoopRange ?? _localSelectingLoop;
+
+  void _changeLoopSelection(bool selecting) {
+    _dismissDictionary();
+    setState(() {
+      _localSelectingLoop = selecting;
+      _loopAnchor = null;
+    });
+    widget.onLoopSelectionChanged?.call(selecting);
+    if (selecting) _scrollToSelectionStart();
+  }
+
+  void _scrollToSelectionStart() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollToActiveLine();
+    });
+  }
+
+  int? _loopAnchor;
+
+  bool get _showCurrentOnly => widget.showCurrentOnly && !_selectingLoop;
+
+  void _selectLoopLine(int index) {
+    final int anchor = _loopAnchor ?? index;
+    setState(() => _loopAnchor = anchor);
+    widget.onLoopLinesSelected?.call(anchor, index);
+  }
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_dismissDictionary);
-    if (widget.isPlaying) {
+    if (_selectingLoop) {
+      _scrollToSelectionStart();
+    } else if (widget.isPlaying) {
       _scheduleScrollToActiveLine();
     }
   }
@@ -112,6 +157,11 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
   @override
   void didUpdateWidget(covariant PlayerSubtitleList oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if ((widget.selectingLoopRange ?? false) &&
+        !(oldWidget.selectingLoopRange ?? false)) {
+      _loopAnchor = null;
+      _scrollToSelectionStart();
+    }
     final bool listStateChanged =
         oldWidget.activeIndex != widget.activeIndex ||
         oldWidget.lines.length != widget.lines.length ||
@@ -119,6 +169,7 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
         oldWidget.showCurrentOnly != widget.showCurrentOnly;
     final bool shouldFollowCurrentLine =
         _autoFollowCurrentLine &&
+        !_selectingLoop &&
         widget.isPlaying &&
         (oldWidget.activeIndex != widget.activeIndex ||
             oldWidget.isPlaying != widget.isPlaying);
@@ -415,7 +466,13 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
 
             final PlayerSubtitleLine line = widget.lines[originalIndex];
             final bool active = originalIndex == widget.activeIndex;
-            final bool isLooping = originalIndex == widget.loopingLineIndex;
+            final bool inLoopRange =
+                widget.loopFirstLine != null &&
+                widget.loopLastLine != null &&
+                originalIndex >= widget.loopFirstLine! &&
+                originalIndex <= widget.loopLastLine!;
+            final bool isLooping =
+                inLoopRange || originalIndex == widget.loopingLineIndex;
             final bool isPast = originalIndex < widget.activeIndex;
             final String? pronunciationUnavailableReason = widget
                 .pronunciationUnavailableReasonForLine
@@ -429,16 +486,24 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
 
             return InkWell(
               key: _rowKeyFor(originalIndex),
-              onTap: () => widget.onTapLine(originalIndex),
+              onTap: () => _selectingLoop
+                  ? _selectLoopLine(originalIndex)
+                  : widget.onTapLine(originalIndex),
               onLongPress: () => _openActions(context, line, originalIndex),
               borderRadius: BorderRadius.circular(20),
-              child: Ink(
+              child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: active ? const Color(0xFFEFFFF5) : Colors.white,
+                  color: inLoopRange
+                      ? const Color(0xFFE4F2FF)
+                      : active
+                      ? const Color(0xFFEFFFF5)
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: active
+                    color: inLoopRange
+                        ? AppDesignTokens.primaryBlueDark
+                        : active
                         ? AppDesignTokens.brandGreen
                         : const Color(0xFFE1E7E1),
                     width: active ? 2.5 : 1.5,
@@ -479,6 +544,23 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
+                        if (inLoopRange)
+                          Text(
+                            originalIndex == widget.loopFirstLine
+                                ? (originalIndex == widget.loopLastLine
+                                      ? 'A—B · 循环区间'
+                                      : 'A · 循环起点')
+                                : originalIndex == widget.loopLastLine
+                                ? 'B · 循环终点'
+                                : '循环区间',
+                            key: ValueKey<String>(
+                              'subtitle-loop-selected-$originalIndex',
+                            ),
+                            style: const TextStyle(
+                              color: AppDesignTokens.primaryBlueDark,
+                              fontSize: 11,
+                            ),
+                          ),
                         Row(
                           children: <Widget>[
                             FilledButton.tonal(
@@ -656,6 +738,21 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                         const _SelectableLineBreak(),
                       ],
                     ),
+                    if (_selectingLoop)
+                      Positioned.fill(
+                        child: Semantics(
+                          label: '选择第 ${originalIndex + 1} 句循环',
+                          selected: inLoopRange,
+                          button: true,
+                          child: GestureDetector(
+                            key: ValueKey<String>(
+                              'subtitle-range-select-$originalIndex',
+                            ),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => _selectLoopLine(originalIndex),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -681,34 +778,65 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
     );
     return Column(
       children: <Widget>[
-        Align(
-          alignment: Alignment.centerRight,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
+        Wrap(
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            if (widget.showLoopControl &&
+                widget.onLoopLinesSelected != null &&
+                totalLineCount > 0)
               TextButton.icon(
+                key: const ValueKey<String>('subtitle-select-loop-range'),
                 onPressed: () {
-                  _autoFollowCurrentLine = true;
-                  _scrollToActiveLine();
+                  if (_selectingLoop) {
+                    _changeLoopSelection(false);
+                  } else if (widget.isLooping || widget.loopFirstLine != null) {
+                    widget.onClearLoop?.call();
+                  } else {
+                    _changeLoopSelection(true);
+                  }
                 },
-                icon: const Icon(Icons.my_location_rounded),
-                label: const Text('定位当前'),
+                icon: Icon(
+                  _selectingLoop ? Icons.check_rounded : Icons.repeat_rounded,
+                  size: 18,
+                ),
+                label: Text(
+                  _selectingLoop
+                      ? '完成选择'
+                      : widget.isLooping || widget.loopFirstLine != null
+                      ? '退出循环'
+                      : '选择循环区间',
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              if (widget.onRegenerateAiSubtitles != null)
-                TextButton.icon(
-                  onPressed: widget.onRegenerateAiSubtitles,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('重新生成'),
-                ),
-              if (widget.onDeleteAiSubtitles != null)
-                TextButton.icon(
-                  onPressed: widget.onDeleteAiSubtitles,
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('切回原始字幕'),
-                ),
-            ],
-          ),
+            const SizedBox(width: 4),
+            TextButton.icon(
+              onPressed: () {
+                _autoFollowCurrentLine = true;
+                _scrollToActiveLine();
+              },
+              icon: const Icon(Icons.my_location_rounded, size: 18),
+              label: const Text('定位当前'),
+            ),
+            if (widget.onRegenerateAiSubtitles != null)
+              TextButton.icon(
+                onPressed: widget.onRegenerateAiSubtitles,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('重新生成'),
+              ),
+            if (widget.onDeleteAiSubtitles != null)
+              TextButton.icon(
+                onPressed: widget.onDeleteAiSubtitles,
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                label: const Text('切回原始字幕'),
+              ),
+          ],
         ),
+        if (_selectingLoop)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text('先选首句，再选尾句，中间字幕自动全选。', style: TextStyle(fontSize: 12)),
+          ),
         Expanded(child: list),
       ],
     );
