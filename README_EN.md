@@ -72,7 +72,7 @@ Short loops keep auditory recognition and spoken output together. A few lines at
 - **Course resource directories**: View video and subtitle locations from a course card or its details. On desktop, preview and relink moved folders while retaining learning progress and vocabulary; missing episodes stay in the library, and new videos are imported only when selected.
 - **Subtitle import and matching**: Import `.srt` or `.vtt` files; match subtitles to videos from filenames and episode markers.
 - **Sentence-level navigation**: Tap a subtitle line to jump to the right point in the video.
-- **Replay and loop a line**: Replay the current sentence quickly or enable sentence looping.
+- **Single-sentence and A–B looping**. Repeat a single line or loop a stretch of dialogue by setting A/B points or selecting consecutive subtitles. The subtitle selection and timeline endpoints stay in sync. [See the screenshot and instructions](#ab-looping).
 - **Subtitle modes**: Switch among English, bilingual, and hidden subtitles as you progress.
 - **Word lookup from subtitles**: Tap a word for its definition while it is still in context.
 - **Full word-by-word transcript**: The active sentence and word follow playback in the complete transcript reader.
@@ -84,6 +84,18 @@ Short loops keep auditory recognition and spoken output together. A few lines at
 - **Optional AI subtitles**: Generate or switch subtitles for videos without them using your own provider configuration.
 - **AI subtitle lessons (consume Tokens)**: Explain the current utterance using nearby dialogue, with three automatically saved cards covering context, expressions, and usage. [How to use lessons and understand Token costs](#saved-subtitle-lessons).
 - **Local first**: Your videos, subtitles, and learning records remain centered on your device.
+
+## AB looping
+
+Loop a few consecutive lines of dialogue to practice connected speech, intonation, and shadowing. The player's **循环** (Loop) menu offers both single-sentence and A–B looping.
+
+<img src="assets/showcase/ab-loop.jpg" alt="A/B loop in the app. The upper bar shows progress through the current loop, the lower timeline shows the A/B handles, and the subtitle panel highlights consecutive lines with an exit control at the top." width="100%" />
+
+- **Set a range in the player.** Open **循环** (Loop) → **AB 区间循环** (A–B loop). Use the upper **本轮** (Current loop) bar to see how far the loop has played or seek within it. Drag either round A/B handle on the lower timeline to adjust the range, even down to a short sentence. By default, A is the start of the current subtitle. B is about two minutes after A, or at the end of the video if it comes sooner.
+- **Select a range from subtitles.** Click **选择循环区间** (Select loop range) in the blue header above the subtitle list. Select the first and last lines. Every line between them is included automatically. Click **完成选择** (Done selecting) and start playback. The timeline reflects your selection, and the same button becomes **退出循环** (Exit loop).
+- **Fine-tune or exit.** Dragging either endpoint pauses playback and previews the boundary in the video and subtitles. The highlighted lines update as you drag. Click **×** or **退出循环** (Exit loop) to return to A and restore the regular progress bar.
+
+A–B looping works in landscape, portrait, and fullscreen, and the selection survives screen rotation. Playback jumps back to A when it reaches B. To repeat just one sentence, use the loop button beside that subtitle line.
 
 The `.apkg` templates provide live English pronunciation on both sides without bundling audio files. Official Anki clients use native TTS. Web clients that allow card scripts and provide the Web Speech API show a replay button using a local English voice, without external speech API calls. Clients that block scripts or lack an English voice cannot provide playback; unsupported TTS syntax stays hidden. Native TTS requires Anki 2.1.20+, AnkiMobile 2.0.56+, or AnkiDroid 2.17+; Linux needs a TTS add-on. Re-export and re-import older decks with template updates enabled.
 
