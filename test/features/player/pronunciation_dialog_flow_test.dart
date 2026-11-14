@@ -3,18 +3,21 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:common_learn_english/constants/feature_flags.dart';
+import 'package:common_learn_english/features/player/data/doubao_pronunciation_service.dart';
 import 'package:common_learn_english/features/player/data/pronunciation_audio_extractor.dart';
+import 'package:common_learn_english/features/player/data/pronunciation_history_store.dart';
 import 'package:common_learn_english/features/player/data/pronunciation_providers.dart';
-import 'package:common_learn_english/features/player/data/tencent_pronunciation_service.dart';
 import 'package:common_learn_english/features/player/domain/pronunciation_assessment.dart';
 import 'package:common_learn_english/features/player/presentation/widgets/pronunciation_assessment_dialog.dart';
 import 'package:common_learn_english/features/settings/data/pronunciation_credentials.dart';
+import 'package:common_learn_english/features/shared/data/word_pronunciation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:riverpod/src/framework.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ReviewPaths extends PathProviderPlatform {
   ReviewPaths(this.directory);
@@ -52,6 +55,7 @@ class ReviewExtractor extends PronunciationAudioExtractor {
 class ReviewStore implements PronunciationCredentialStore {
   int reads = 0;
   Completer<PronunciationCredentials>? pendingRead;
+  PronunciationCredentials credentials = const PronunciationCredentials();
 
   @override
   Future<PronunciationCredentials> read() async {
@@ -59,15 +63,13 @@ class ReviewStore implements PronunciationCredentialStore {
     if (pendingRead != null) {
       return pendingRead!.future;
     }
-    return const PronunciationCredentials(
-      appId: '1250000000',
-      secretId: 'test-id',
-      secretKey: 'test-key',
-    );
+    return credentials;
   }
 
   @override
-  Future<void> write(PronunciationCredentials value) async {}
+  Future<void> write(PronunciationCredentials value) async {
+    credentials = value;
+  }
 }
 
 class ReviewMicrophone implements PronunciationMicrophone {
@@ -113,7 +115,7 @@ class ReviewPreview implements PronunciationPreviewPlayer {
   Future<void> dispose() async {}
 }
 
-class ReviewService extends TencentPronunciationService {
+class ReviewService extends DoubaoPronunciationService {
   int calls = 0;
   final Completer<PronunciationAssessmentResult> pending =
       Completer<PronunciationAssessmentResult>();
@@ -122,10 +124,12 @@ class ReviewService extends TencentPronunciationService {
     required PronunciationCredentials credentials,
     required PronunciationAssessmentTarget target,
     required Pcm16MonoAudio audio,
+    required Pcm16MonoAudio reference,
     void Function(Future<void> Function())? onCancelAvailable,
   }) {
     calls++;
     expect(target.text, 'Take a break.');
+    expect(reference.durationMs, 500);
     expect(audio.durationMs, anyOf(500, 520));
     return pending.future;
   }
@@ -133,8 +137,9 @@ class ReviewService extends TencentPronunciationService {
 
 void main() {
   testWidgets(
-    'local recording and optional scoring preserve session and clean files',
+    'local recording and optional coaching preserve session and clean files',
     (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(800, 900);
       addTearDown(tester.view.resetPhysicalSize);
@@ -152,6 +157,19 @@ void main() {
       final ReviewPreview preview = ReviewPreview();
       final ReviewService service = ReviewService();
       final ReviewStore store = ReviewStore();
+      final Directory support = Directory('${temp.path}/app-support');
+      final PronunciationHistoryStore historyStore = PronunciationHistoryStore(
+        supportDirectory: () async => support,
+      );
+      const PronunciationAssessmentTarget target =
+          PronunciationAssessmentTarget(
+            text: 'Take a break.',
+            videoSource: '/local/fixture.mp4',
+            startMs: 600,
+            endMs: 1551,
+            videoDuration: Duration(milliseconds: 5393),
+          );
+      final List<String> spokenFeedback = <String>[];
       await tester.pumpWidget(
         ProviderScope(
           overrides: <Override>[
@@ -159,11 +177,19 @@ void main() {
               ReviewExtractor(temp),
             ),
             pronunciationCredentialStoreProvider.overrideWithValue(store),
-            pronunciationMicrophoneFactoryProvider.overrideWithValue(() => mic),
+            pronunciationMicrophoneFactoryProvider.overrideWithValue(
+              () => mic.disposes == 0 ? mic : ReviewMicrophone(),
+            ),
+            pronunciationHistoryStoreProvider.overrideWithValue(historyStore),
             pronunciationPreviewPlayerFactoryProvider.overrideWithValue(
               () => preview,
             ),
-            tencentPronunciationServiceProvider.overrideWithValue(service),
+            doubaoPronunciationServiceProvider.overrideWithValue(service),
+            pronunciationFeedbackSpeechProvider.overrideWithValue(
+              WordPronunciationService(
+                speakOverride: (String text) async => spokenFeedback.add(text),
+              ),
+            ),
           ],
           child: MaterialApp(
             home: Builder(
@@ -171,13 +197,7 @@ void main() {
                 body: TextButton(
                   onPressed: () => showPronunciationAssessmentDialog(
                     context,
-                    target: const PronunciationAssessmentTarget(
-                      text: 'Take a break.',
-                      videoSource: '/local/fixture.mp4',
-                      startMs: 600,
-                      endMs: 1551,
-                      videoDuration: Duration(milliseconds: 5393),
-                    ),
+                    target: target,
                   ),
                   child: const Text('Open'),
                 ),
@@ -212,12 +232,12 @@ void main() {
             .onPressed,
         isNull,
       );
-      if (pronunciationScoringEnabled) {
+      if (pronunciationCoachingEnabled) {
         expect(
           tester
               .widget<FilledButton>(
                 find.byKey(
-                  const ValueKey<String>('pronunciation-score-button'),
+                  const ValueKey<String>('pronunciation-guidance-button'),
                 ),
               )
               .onPressed,
@@ -225,7 +245,7 @@ void main() {
         );
       } else {
         expect(
-          find.byKey(const ValueKey<String>('pronunciation-score-button')),
+          find.byKey(const ValueKey<String>('pronunciation-guidance-button')),
           findsNothing,
         );
       }
@@ -258,7 +278,7 @@ void main() {
       expect(find.text('0.50 秒'), findsOneWidget);
       expect(find.text('0.52 秒'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      if (!pronunciationScoringEnabled) {
+      if (!pronunciationCoachingEnabled) {
         expect(find.textContaining('评分'), findsNothing);
         expect(find.textContaining('腾讯'), findsNothing);
         await tester.tap(
@@ -306,9 +326,9 @@ void main() {
         expect(temp.listSync(recursive: true).whereType<File>(), isEmpty);
         return;
       }
-      // An enabled, focused score button must not score on Space.
+      // A focused guidance button must not submit on Space.
       Focus.of(
-        tester.element(find.byIcon(Icons.fact_check_outlined)),
+        tester.element(find.byIcon(Icons.record_voice_over_outlined)),
       ).requestFocus();
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
@@ -331,15 +351,44 @@ void main() {
         );
       }
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey<String>('pronunciation-score-button')),
+      final Finder guidanceButton = find.byKey(
+        const ValueKey<String>('pronunciation-guidance-button'),
       );
+      expect(find.textContaining('按实际音频和文字用量计费'), findsOneWidget);
+      await tester.tap(guidanceButton);
+      await tester.pumpAndSettle();
+      expect(service.calls, 0);
+      expect(find.text('配置火山方舟 API Key'), findsOneWidget);
+      await tester.tap(find.text('去配置'));
+      await tester.pumpAndSettle();
+      expect(find.text('设置 · 跟读指导'), findsOneWidget);
+      expect(find.text('申请 API Key'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'test-key');
+      expect(find.text('保存密钥'), findsNothing);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(store.credentials.isComplete, isTrue);
+      expect(find.text('重新录制'), findsOneWidget);
+      await tester.tap(guidanceButton);
+      await tester.pumpAndSettle();
+      expect(find.text('首次使用豆包发音指导'), findsOneWidget);
+      await tester.tap(find.text('跟读指导帮助').last);
+      await tester.pumpAndSettle();
+      expect(find.text('火山方舟官方计费说明'), findsOneWidget);
+      await tester.tap(find.text('关闭').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(service.calls, 0);
+      await tester.tap(guidanceButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('同意并获取指导'));
       await tester.pump();
       expect(service.calls, 1);
       expect(store.reads, 1);
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       await tester.pump();
-      expect(mic.starts, 2, reason: 'Space cannot re-record while scoring');
+      expect(mic.starts, 2, reason: 'Space cannot re-record during a request');
       expect(
         tester
             .widget<FilledButton>(
@@ -348,38 +397,46 @@ void main() {
             .onPressed,
         isNull,
       );
+      const String guidance = '最后一个词可以再读一遍，嘴慢慢收窄。';
       service.pending.complete(
-        const PronunciationAssessmentResult(
-          suggestedScore: 86,
-          accuracy: 84,
-          fluency: .9,
-          completion: 1,
-          words: <PronunciationWordResult>[
-            PronunciationWordResult(
-              word: 'break',
-              referenceWord: 'break',
-              matchTag: 3,
-              accuracy: 50,
-            ),
-          ],
-        ),
+        const PronunciationAssessmentResult(guidance: guidance),
       );
+      for (int i = 0; i < 20 && find.text('发音指导').evaluate().isEmpty; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
       await tester.pumpAndSettle();
-      expect(find.text('逐词结果'), findsOneWidget);
-      expect(find.textContaining('86'), findsWidgets);
-      expect(find.text('已评分'), findsOneWidget);
+      expect(find.text('逐词结果'), findsNothing);
       expect(
-        tester
-            .widget<FilledButton>(
-              find.byKey(const ValueKey<String>('pronunciation-score-button')),
-            )
-            .onPressed,
-        isNull,
+        (await SharedPreferences.getInstance()).getBool(
+          'pronunciation.doubao.billingAccepted.v1',
+        ),
+        isTrue,
       );
+      expect(find.widgetWithText(AlertDialog, '发音指导'), findsOneWidget);
+      expect(find.text(guidance), findsOneWidget);
+      expect(spokenFeedback.single, guidance);
+      await tester.tap(find.text('听原声整句'));
+      await tester.pumpAndSettle();
+      expect(preview.played.last, endsWith('reference.wav'));
+      await tester.tap(find.widgetWithText(TextButton, '关闭'));
+      await tester.pumpAndSettle();
+      expect(find.text('查看指导'), findsOneWidget);
+      await tester.tap(guidanceButton);
+      await tester.pumpAndSettle();
+      expect(find.text(guidance), findsOneWidget);
+      expect(spokenFeedback, hasLength(1));
+      await tester.tap(find.widgetWithText(TextButton, '听发音指导'));
+      await tester.pumpAndSettle();
+      expect(spokenFeedback, hasLength(2));
       expect(service.calls, 1);
+      await tester.tap(find.widgetWithText(TextButton, '关闭'));
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
 
-      // A fresh recording may be scored, but dismissing while the system is
+      // A fresh recording may be submitted, but dismissing while the system is
       // reading the key must cancel before the route's exit animation finishes.
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       for (int i = 0; i < 8; i++) {
@@ -409,20 +466,14 @@ void main() {
         listen: false,
       ).invalidate(pronunciationCredentialsProvider);
       await tester.tap(
-        find.byKey(const ValueKey<String>('pronunciation-score-button')),
+        find.byKey(const ValueKey<String>('pronunciation-guidance-button')),
       );
       await tester.pump();
       expect(store.reads, 2);
       await tester.tap(
         find.byKey(const ValueKey<String>('pronunciation-dialog-close')),
       );
-      delayedKey.complete(
-        const PronunciationCredentials(
-          appId: '1250000000',
-          secretId: 'test-id',
-          secretKey: 'test-key',
-        ),
-      );
+      delayedKey.complete(const PronunciationCredentials(apiKey: 'test-key'));
       await tester.pump();
       expect(service.calls, 1);
       await tester.pumpAndSettle();
@@ -433,7 +484,67 @@ void main() {
         );
       }
       expect(mic.disposes, 1);
-      expect(temp.listSync(recursive: true).whereType<File>(), isEmpty);
+      final List<File> savedFiles = temp
+          .listSync(recursive: true)
+          .whereType<File>()
+          .toList();
+      expect(savedFiles, hasLength(2));
+      expect(
+        savedFiles.every((File file) => file.path.startsWith(support.path)),
+        isTrue,
+      );
+
+      final PronunciationHistoryEntry? latest = await tester.runAsync(
+        () => historyStore.save(
+          target,
+          const PronunciationAssessmentResult(suggestedScore: 91, accuracy: 91),
+          Pcm16MonoAudio(bytes: Uint8List(9600), sampleRate: 16000),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      for (int i = 0; i < 20 && find.text('练习记录').evaluate().isEmpty; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('练习记录'));
+      await tester.pumpAndSettle();
+      expect(find.text('本句练习记录'), findsOneWidget);
+      expect(find.text('第 2 次 · 最近一次'), findsOneWidget);
+      expect(find.text('第 1 次'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, '评分 91.0'));
+      for (int i = 0; i < 20 && find.text('历史发音评分').evaluate().isEmpty; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('历史发音评分'), findsOneWidget);
+      await tester.tap(find.text('听我的整句'));
+      await tester.pump();
+      expect(preview.played.last, latest!.recordingFile.path);
+      await tester.tap(find.widgetWithText(TextButton, '关闭'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('练习记录'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, '第 1 次'));
+      for (int i = 0; i < 20 && find.text('发音指导').evaluate().isEmpty; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(find.text(guidance), findsOneWidget);
+      expect(find.text('听我的整句'), findsOneWidget);
+      await tester.tap(find.text('听我的整句'));
+      await tester.pump();
+      expect(preview.played.last, endsWith('/recording.wav'));
+      expect(preview.played.last, isNot(latest.recordingFile.path));
+      expect(service.calls, 1);
     },
   );
 }

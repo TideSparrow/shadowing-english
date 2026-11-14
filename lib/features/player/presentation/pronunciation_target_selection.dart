@@ -56,6 +56,8 @@ PronunciationTargetSelection selectPronunciationTarget({
     startMs: state.videoStartMsForLine(index),
     endMs: state.videoEndMsForLine(index),
     videoDuration: videoDuration,
+    subtitleStartMs: line.startMs,
+    subtitleEndMs: line.endMs,
   );
   final String? validationError = target.validationError;
   if (validationError != null) {

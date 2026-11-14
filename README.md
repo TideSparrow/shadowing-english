@@ -211,7 +211,17 @@ AI 识别仍可能受到背景音乐、多人重叠说话、口音和录音质�
 
 桌面安装包内置了用于本地音频提取的精简版 FFmpeg，无需用户额外安装；许可证和构建信息会随应用一起发布。
 
-当前提供本地跟读录音、回放和原声波形对照，无需评分 API 密钥；云端评分及其配置入口暂时隐藏。Linux 桌面版运行需要 `libsecret-1-0`，从源码构建还需要 `libsecret-1-dev`。麦克风录音依赖 `pulseaudio-utils`（提供 `parecord` 和 `pactl`）及可用的 PulseAudio 服务，PipeWire 环境需启用 PulseAudio 兼容服务。
+本地跟读录音、回放和原声波形对照无需 API 密钥。Linux 桌面版运行需要 `libsecret-1-0`，从源码构建还需要 `libsecret-1-dev`。麦克风录音依赖 `pulseaudio-utils`（提供 `parecord` 和 `pactl`）及可用的 PulseAudio 服务，PipeWire 环境需启用 PulseAudio 兼容服务。
+
+### 跟读指导
+
+1. 在火山方舟[开通 Doubao Seed 2.1 Lite](https://ark.volcengine.com/region:cn-beijing/openManagement)，并[创建 API Key](https://ark.volcengine.com/region:cn-beijing/apiKey)。
+2. 把 Key 填在「设置 · 跟读指导」，输入会自动保存。
+3. 在「跟读对照」录完后点「获取指导」。首次提交会提示计费，提交会将本句字幕、视频原声和你的录音发给火山方舟。
+
+豆包返回中文建议，设备会自动朗读。你可以回听视频原声和自己的录音，再重录一次。同一句的诊断建议和录音保存在本机，可在「练习记录」中回顾。已有的历史评分也可以从这里打开。回顾无需重新提交。
+
+每次提交按音频和文字用量后付费。界面会按本次音频长度和一段简短回复估算费用，实际扣费以方舟账单为准。[方舟模型计费](https://docs.volcengine.com/docs/ark/model-pricing?lang=zh)
 
 ### 从源码运行
 

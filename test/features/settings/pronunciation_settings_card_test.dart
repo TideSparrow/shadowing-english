@@ -21,9 +21,13 @@ class _Store implements PronunciationCredentialStore {
 }
 
 void main() {
-  testWidgets('shows independent Tencent credentials and official links', (
+  testWidgets('shows a single Ark API key and official links', (
     WidgetTester tester,
   ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final List<String> openedLinks = <String>[];
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
@@ -35,22 +39,46 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(
+        child: MaterialApp(
           home: Scaffold(
-            body: SingleChildScrollView(child: PronunciationSettingsCard()),
+            body: SingleChildScrollView(
+              child: PronunciationSettingsCard(
+                openLink: (BuildContext context, String url) async {
+                  openedLinks.add(url);
+                  return true;
+                },
+              ),
+            ),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('跟读评测'), findsOneWidget);
-    expect(find.text('AppID'), findsOneWidget);
-    expect(find.text('SecretId'), findsOneWidget);
-    expect(find.text('SecretKey'), findsOneWidget);
-    expect(find.text('申请 API 密钥'), findsOneWidget);
-    expect(find.text('开通口语评测'), findsOneWidget);
-    expect(find.textContaining('不会读取翻译或 ASR 配置'), findsOneWidget);
+    expect(find.text('跟读指导'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('API Key'), findsOneWidget);
+    await tester.tap(find.text('申请 API Key'));
+    expect(
+      openedLinks.single,
+      'https://ark.volcengine.com/region:cn-beijing/apiKey',
+    );
+    expect(find.text('火山方舟计费'), findsOneWidget);
+    final Finder activate = find.text('开通模型');
+    await tester.ensureVisible(activate);
+    await tester.tap(activate);
+    expect(
+      openedLinks.last,
+      'https://ark.volcengine.com/region:cn-beijing/openManagement',
+    );
+    final Finder help = find.text('帮助文档');
+    await tester.ensureVisible(help);
+    await tester.pumpAndSettle();
+    await tester.tap(help);
+    await tester.pumpAndSettle();
+    expect(find.text('Shadowing English 跟读指导帮助'), findsOneWidget);
+    expect(find.widgetWithText(AlertDialog, '开通模型'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -74,34 +102,14 @@ void main() {
       );
       await tester.pump();
       final Finder fields = find.byType(TextField);
-      expect(fields, findsNWidgets(3));
-      for (int index = 0; index < 3; index++) {
-        expect(tester.widget<TextField>(fields.at(index)).enabled, isFalse);
-      }
+      expect(fields, findsOneWidget);
+      expect(tester.widget<TextField>(fields).enabled, isFalse);
 
-      loading.complete(
-        const PronunciationCredentials(
-          appId: '1250000000',
-          secretId: 'stored-id',
-          secretKey: 'stored-key',
-        ),
-      );
+      loading.complete(const PronunciationCredentials(apiKey: 'stored-key'));
       await tester.pumpAndSettle();
-      for (int index = 0; index < 3; index++) {
-        expect(tester.widget<TextField>(fields.at(index)).enabled, isTrue);
-      }
-      expect(
-        tester.widget<TextField>(fields.at(0)).controller!.text,
-        '1250000000',
-      );
-      expect(
-        tester.widget<TextField>(fields.at(1)).controller!.text,
-        'stored-id',
-      );
-      expect(
-        tester.widget<TextField>(fields.at(2)).controller!.text,
-        'stored-key',
-      );
+      expect(tester.widget<TextField>(fields).enabled, isTrue);
+      expect(tester.widget<TextField>(fields).obscureText, isTrue);
+      expect(tester.widget<TextField>(fields).controller!.text, 'stored-key');
     },
   );
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -55,6 +56,7 @@ class WordPronunciationService {
     this.selectedEngine = '',
     this.selectedVoice = '',
     this.selectedRate = _defaultPronunciationSpeechRate,
+    this.offlineOnly = false,
     WordPronunciationTtsClient? ttsClient,
   }) : _ttsClient = ttsClient ?? WordPronunciationTtsClient();
 
@@ -63,6 +65,7 @@ class WordPronunciationService {
   final String selectedEngine;
   final String selectedVoice;
   final double selectedRate;
+  final bool offlineOnly;
   final WordPronunciationTtsClient _ttsClient;
 
   Future<void> speak(
@@ -81,7 +84,18 @@ class WordPronunciationService {
       return;
     }
 
-    await _ttsClient.speakText(
+    final Future<void> Function(
+      String, {
+      String language,
+      String engine,
+      String voice,
+      double rate,
+      Duration speechTimeout,
+    })
+    speakText = offlineOnly
+        ? _ttsClient.speakOfflineText
+        : _ttsClient.speakText;
+    await speakText(
       normalizedText,
       language: language,
       engine: selectedEngine,
@@ -206,6 +220,38 @@ class WordPronunciationTtsClient {
   Completer<void>? _activeSpeakCompleter;
 
   FlutterTts get _client => _flutterTts ??= FlutterTts();
+
+  Future<void> speakOfflineText(
+    String text, {
+    String language = 'en-US',
+    String engine = '',
+    String voice = '',
+    double rate = _defaultPronunciationSpeechRate,
+    Duration speechTimeout = const Duration(seconds: 8),
+  }) async {
+    if (kIsWeb || defaultTargetPlatform == TargetPlatform.linux) {
+      throw const WordPronunciationException();
+    }
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      await speakText(
+        text,
+        language: language,
+        rate: rate,
+        speechTimeout: speechTimeout,
+      );
+      return;
+    }
+    final bool? success = await _nativeChannel
+        .invokeMethod<bool>('speak', <String, Object>{
+          'text': text,
+          'language': language,
+          'engine': engine,
+          'voice': voice,
+          'rate': rate,
+          'offlineOnly': true,
+        });
+    if (success != true) throw const WordPronunciationException();
+  }
 
   Future<void> speakText(
     String text, {

@@ -1,15 +1,24 @@
 import 'dart:async';
 
+import 'package:common_learn_english/features/player/domain/pronunciation_assessment.dart';
 import 'package:common_learn_english/features/settings/data/pronunciation_credentials.dart';
 import 'package:common_learn_english/features/settings/presentation/settings_provider.dart';
 import 'package:common_learn_english/features/settings/presentation/settings_screen.dart';
-import 'package:common_learn_english/features/settings/presentation/widgets/pronunciation_settings_card.dart';
 import 'package:common_learn_english/features/settings/presentation/widgets/settings_group_card.dart';
 import 'package:common_learn_english/features/shared/data/word_pronunciation_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod/src/framework.dart' show Override;
+
+class _EmptyCredentialStore implements PronunciationCredentialStore {
+  @override
+  Future<PronunciationCredentials> read() async =>
+      const PronunciationCredentials();
+
+  @override
+  Future<void> write(PronunciationCredentials credentials) async {}
+}
 
 void main() {
   testWidgets(
@@ -18,13 +27,11 @@ void main() {
       tester.view.physicalSize = const Size(1366, 1024);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      int credentialInitializations = 0;
       final ProviderContainer container = ProviderContainer(
         overrides: <Override>[
-          pronunciationCredentialStoreProvider.overrideWith((Ref ref) {
-            credentialInitializations++;
-            throw StateError('Hidden assessment must not load credentials');
-          }),
+          pronunciationCredentialStoreProvider.overrideWithValue(
+            _EmptyCredentialStore(),
+          ),
         ],
       );
       addTearDown(container.dispose);
@@ -54,11 +61,67 @@ void main() {
       control.onChanged!(3);
       await tester.pumpAndSettle();
       expect(container.read(learningSettingsProvider).ttsRate, 3);
-      expect(find.byType(PronunciationSettingsCard), findsNothing);
-      expect(credentialInitializations, 0);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('follow-along coaching sits above system settings', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          pronunciationCredentialStoreProvider.overrideWithValue(
+            _EmptyCredentialStore(),
+          ),
+        ],
+        child: const MaterialApp(home: SettingsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final Finder assessment = _section('跟读指导');
+    final Finder system = _section('系统');
+    expect(
+      tester.getTopLeft(assessment).dy,
+      lessThan(tester.getTopLeft(system).dy),
+    );
+    await tester.tap(assessment);
+    await tester.pumpAndSettle();
+    expect(find.text('申请 API Key').hitTestable(), findsOneWidget);
+    expect(find.text('保存密钥'), findsNothing);
+    expect(_selectedSection(tester, '跟读指导'), isTrue);
+    await tester.tap(system);
+    await tester.pumpAndSettle();
+    expect(find.text('管理 AI 字幕').hitTestable(), findsOneWidget);
+    expect(_selectedSection(tester, '系统'), isTrue);
+    await tester.drag(_settingsContent, const Offset(0, 360));
+    await tester.pumpAndSettle();
+    expect(_selectedSection(tester, '系统'), isFalse);
+  });
+
+  testWidgets('narrow settings open the vertical directory on demand', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: SettingsScreen())),
+    );
+    expect(_section('系统'), findsNothing);
+    await tester.tap(find.text('设置目录'));
+    await tester.pumpAndSettle();
+    final Finder system = _section('系统');
+    await tester.ensureVisible(system);
+    await tester.tap(system);
+    await tester.pumpAndSettle();
+    expect(system, findsNothing);
+    expect(find.text('管理 AI 字幕').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'voice preview uses current voice and rate, stops on selection and navigation',
@@ -249,7 +312,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('设置'), findsWidgets);
-    expect(find.text('播放'), findsOneWidget);
+    expect(_settingsText('播放'), findsOneWidget);
     expect(find.text('学习').last, findsOneWidget);
     expect(find.text('默认字幕模式'), findsOneWidget);
     expect(find.text('单词高亮样式'), findsOneWidget);
@@ -259,9 +322,9 @@ void main() {
 
     await _scrollToTranslationSettings(tester);
 
-    expect(find.text('翻译'), findsOneWidget);
+    expect(_settingsText('翻译'), findsOneWidget);
     expect(find.text('翻译来源'), findsOneWidget);
-    expect(find.text('API Key'), findsOneWidget);
+    expect(find.text('API Key').hitTestable(), findsOneWidget);
     expect(find.text('获取模型'), findsWidgets);
     expect(find.text('Model'), findsOneWidget);
     expect(find.text('API Secret'), findsNothing);
@@ -287,7 +350,7 @@ void main() {
     await tester.tap(find.text('OpenAI').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('API Key'), findsOneWidget);
+    expect(find.text('API Key').hitTestable(), findsOneWidget);
     expect(find.text('获取模型'), findsWidgets);
     expect(find.text('Model'), findsOneWidget);
   });
@@ -402,7 +465,7 @@ void main() {
               false),
     );
     for (int i = 0; i < 12 && asr.evaluate().isEmpty; i += 1) {
-      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.drag(_settingsContent, const Offset(0, -400));
       await tester.pumpAndSettle();
     }
     expect(
@@ -432,7 +495,7 @@ void main() {
       index < 8 && find.text('管理 AI 字幕').evaluate().isEmpty;
       index++
     ) {
-      await tester.drag(find.byType(ListView).last, const Offset(0, -500));
+      await tester.drag(_settingsContent, const Offset(0, -500));
       await tester.pumpAndSettle();
     }
 
@@ -442,15 +505,25 @@ void main() {
 }
 
 Future<void> _scrollToTranslationSettings(WidgetTester tester) async {
-  for (
-    int index = 0;
-    index < 4 && find.text('翻译来源').evaluate().isEmpty;
-    index++
-  ) {
-    await tester.drag(find.byType(ListView).last, const Offset(0, -500));
-    await tester.pumpAndSettle();
-  }
+  await tester.ensureVisible(find.text('翻译来源'));
+  await tester.pumpAndSettle();
 }
+
+Finder get _settingsContent =>
+    find.byKey(const ValueKey<String>('settings-content'));
+
+Finder _settingsText(String text) =>
+    find.descendant(of: _settingsContent, matching: find.text(text));
+
+Finder _section(String name) =>
+    find.byKey(ValueKey<String>('settings-section-$name'));
+
+bool? _selectedSection(WidgetTester tester, String name) => tester
+    .widget<Semantics>(
+      find.ancestor(of: _section(name), matching: find.byType(Semantics)).first,
+    )
+    .properties
+    .selected;
 
 Finder _translationProviderDropdown() {
   return find.descendant(

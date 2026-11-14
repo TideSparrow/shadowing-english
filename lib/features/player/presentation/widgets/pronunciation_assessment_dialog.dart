@@ -7,13 +7,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../constants/feature_flags.dart';
 import '../../../settings/data/pronunciation_credentials.dart';
+import '../../../settings/presentation/widgets/pronunciation_help.dart';
+import '../../../settings/presentation/widgets/pronunciation_settings_card.dart';
+import '../../../shared/data/word_pronunciation_service.dart';
+import '../../data/doubao_pronunciation_service.dart';
 import '../../data/pronunciation_audio_extractor.dart';
+import '../../data/pronunciation_history_store.dart';
 import '../../data/pronunciation_providers.dart';
-import '../../data/tencent_pronunciation_service.dart';
 import '../../domain/pronunciation_assessment.dart';
+import '../../domain/pronunciation_feedback.dart';
+
+final Provider<WordPronunciationService> pronunciationFeedbackSpeechProvider =
+    Provider<WordPronunciationService>(
+      (Ref ref) => WordPronunciationService(offlineOnly: true),
+    );
 
 Future<void> showPronunciationAssessmentDialog(
   BuildContext context, {
@@ -43,9 +54,14 @@ class _PronunciationAssessmentDialogState
     with WidgetsBindingObserver {
   static const int _maxRecordingBytes =
       Pcm16MonoAudio.expectedSampleRate * 2 * 60;
+  static const String _billingNoticeKey =
+      'pronunciation.doubao.billingAccepted.v1';
 
   late final PronunciationMicrophone _microphone;
   late final PronunciationPreviewPlayer _previewPlayer;
+  late final PronunciationHistoryStore _historyStore;
+  List<PronunciationHistoryEntry> _history =
+      const <PronunciationHistoryEntry>[];
   final Uint8List _recordingBuffer = Uint8List(_maxRecordingBytes);
   int _recordingBytesWritten = 0;
   StreamSubscription<Uint8List>? _recordingSubscription;
@@ -57,16 +73,22 @@ class _PronunciationAssessmentDialogState
   PronunciationAssessmentResult? _result;
   String? _recordingPath;
   String? _message;
+  bool _showCloudSetup = false;
   String? _referenceError;
   bool _loadingReference = true;
   bool _recordingActive = false;
   bool _finishingRecording = false;
   bool _assessing = false;
+  bool _sendingAssessment = false;
+  bool _showingResult = false;
   bool _resourcesReleased = false;
   bool _releasing = false;
   bool _closing = false;
+  bool _billingAccepted = false;
+  bool _viewingAssessmentLink = false;
   Future<void> Function()? _cancelExtraction;
   Future<void> Function()? _cancelAssessment;
+  Future<void> Function()? _stopFeedbackSpeech;
   Future<void>? _releaseFuture;
   int _assessmentAttempt = 0;
   StreamSubscription<Duration>? _previewSubscription;
@@ -83,6 +105,7 @@ class _PronunciationAssessmentDialogState
     super.initState();
     _microphone = ref.read(pronunciationMicrophoneFactoryProvider)();
     _previewPlayer = ref.read(pronunciationPreviewPlayerFactoryProvider)();
+    _historyStore = ref.read(pronunciationHistoryStoreProvider);
     _previewSubscription = _previewPlayer.position.listen((Duration position) {
       if (mounted && !_resourcesReleased && _playingPath != null) {
         setState(() => _previewPositionMs = position.inMilliseconds);
@@ -90,10 +113,40 @@ class _PronunciationAssessmentDialogState
     });
     WidgetsBinding.instance.addObserver(this);
     unawaited(_loadReferenceAudio());
+    if (pronunciationCoachingEnabled) unawaited(_loadHistory());
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final List<PronunciationHistoryEntry> history = await _historyStore.load(
+        widget.target,
+      );
+      if (!mounted || _resourcesReleased) return;
+      setState(() {
+        final Map<String, PronunciationHistoryEntry> entries =
+            <String, PronunciationHistoryEntry>{
+              for (final PronunciationHistoryEntry entry in _history)
+                entry.directory.path: entry,
+              for (final PronunciationHistoryEntry entry in history)
+                entry.directory.path: entry,
+            };
+        _history = entries.values.toList()
+          ..sort(
+            (PronunciationHistoryEntry a, PronunciationHistoryEntry b) =>
+                b.recordedAt.compareTo(a.recordedAt),
+          );
+      });
+    } catch (_) {
+      if (!mounted || _resourcesReleased) return;
+      setState(() => _message ??= '无法读取本机指导记录。');
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _viewingAssessmentLink = false;
+    // Keep the finished recording while the user checks the billing documents.
+    if (_viewingAssessmentLink && state != AppLifecycleState.detached) return;
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
@@ -193,11 +246,13 @@ class _PronunciationAssessmentDialogState
     if (_resourcesReleased ||
         _recordingActive ||
         _finishingRecording ||
+        _showingResult ||
         _assessing) {
       return;
     }
     setState(() {
       _message = null;
+      _showCloudSetup = false;
       _result = null;
       _finishingRecording = true;
       _playingPath = null;
@@ -370,13 +425,16 @@ class _PronunciationAssessmentDialogState
       await _previewPlayer.playLocalFile(path);
     } catch (_) {
       if (mounted && !_resourcesReleased) {
-        setState(() => _message = '无法播放这段音频。');
+        setState(() {
+          _message = '无法播放这段音频。';
+          _showCloudSetup = false;
+        });
       }
     }
   }
 
-  Future<void> _score() async {
-    if (!pronunciationScoringEnabled ||
+  Future<void> _requestGuidance() async {
+    if (!pronunciationCoachingEnabled ||
         _assessing ||
         _result != null ||
         _recordingActive ||
@@ -390,54 +448,94 @@ class _PronunciationAssessmentDialogState
       setState(() => _message = validationError);
       return;
     }
+    final Pcm16MonoAudio? reference = _reference?.audio;
+    if (reference == null) {
+      setState(
+        () => _message = _loadingReference
+            ? '正在读取原声，请稍后再试。'
+            : '无法读取视频原声，暂时无法获取指导。',
+      );
+      return;
+    }
     final Pcm16MonoAudio audio = _recording!;
     final int attempt = ++_assessmentAttempt;
     setState(() {
       _assessing = true;
       _message = null;
+      _showCloudSetup = false;
       _result = null;
     });
     try {
       final PronunciationCredentials credentials;
       try {
+        await ref.read(pronunciationCredentialsProvider.notifier).pendingSave;
+        if (!mounted || _resourcesReleased || attempt != _assessmentAttempt) {
+          return;
+        }
         credentials = await ref.read(pronunciationCredentialsProvider.future);
       } catch (_) {
         throw const PronunciationAssessmentException(
-          '读取评测密钥失败，请到「设置 - 跟读评测」检查配置。',
+          '读取 API Key 失败，请到「设置 · 跟读指导」检查配置。',
         );
       }
       if (!mounted || _resourcesReleased || attempt != _assessmentAttempt) {
         return;
       }
       if (!credentials.isComplete) {
-        throw const PronunciationAssessmentException(
-          '请先在「设置 - 跟读评测」中填写并保存腾讯云密钥。',
-        );
+        await _showMissingCredentials();
+        return;
       }
+      if (!await _confirmBilling() ||
+          !mounted ||
+          _resourcesReleased ||
+          attempt != _assessmentAttempt) {
+        return;
+      }
+      setState(() => _sendingAssessment = true);
       final PronunciationAssessmentResult result = await ref
-          .read(tencentPronunciationServiceProvider)
+          .read(doubaoPronunciationServiceProvider)
           .evaluate(
             credentials: credentials,
             target: widget.target,
             audio: audio,
+            reference: reference,
             onCancelAvailable: _registerAssessmentCancel,
           );
       _cancelAssessment = null;
       if (!mounted || _resourcesReleased || attempt != _assessmentAttempt) {
         return;
       }
-      setState(() {
-        _result = result;
-        _assessing = false;
-      });
+      setState(() => _result = result);
+      try {
+        final PronunciationHistoryEntry saved = await _historyStore.save(
+          widget.target,
+          result,
+          audio,
+        );
+        if (mounted && !_resourcesReleased) {
+          setState(
+            () => _history = <PronunciationHistoryEntry>[
+              saved,
+              ..._history.where(
+                (PronunciationHistoryEntry entry) =>
+                    entry.directory.path != saved.directory.path,
+              ),
+            ],
+          );
+        }
+      } catch (_) {
+        if (mounted && !_resourcesReleased) {
+          setState(() => _message = '指导已生成，本次记录未能保存到本机。');
+        }
+      }
     } on PronunciationAssessmentException catch (error) {
       _cancelAssessment = null;
       if (!mounted || _resourcesReleased || attempt != _assessmentAttempt) {
         return;
       }
       setState(() {
-        _assessing = false;
         _message = error.message;
+        _showCloudSetup = error.showSetup;
       });
     } catch (_) {
       _cancelAssessment = null;
@@ -445,11 +543,142 @@ class _PronunciationAssessmentDialogState
         return;
       }
       setState(() {
-        _assessing = false;
-        _message = '评分失败，请稍后重试。';
+        _message = '获取指导失败，请稍后重试。';
       });
+    } finally {
+      if (mounted && !_resourcesReleased && attempt == _assessmentAttempt) {
+        setState(() {
+          _assessing = false;
+          _sendingAssessment = false;
+        });
+      }
+    }
+    if (mounted && !_resourcesReleased && _result != null) {
+      await _showResult(readFeedback: true);
     }
   }
+
+  String get _estimatedUsage {
+    final double estimate = DoubaoPronunciationService.estimateCost(
+      targetText: widget.target.text,
+      recordingMs: _recording?.durationMs ?? 0,
+      referenceMs: _reference?.audio.durationMs ?? 0,
+    );
+    return '预计 ¥${estimate.toStringAsFixed(4)} · 按实际音频和文字用量计费';
+  }
+
+  Future<void> _showMissingCredentials() async {
+    final bool? openSettings = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('配置火山方舟 API Key'),
+        content: const Text('请在设置里填写你自己的火山方舟 API Key。配置好后可以回来分析这段录音。'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('去配置'),
+          ),
+        ],
+      ),
+    );
+    if (openSettings != true || !mounted || _resourcesReleased) return;
+    await Navigator.of(context, rootNavigator: true).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => Scaffold(
+          appBar: AppBar(title: const Text('设置 · 跟读指导')),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 640),
+                  child: PronunciationSettingsCard(
+                    openLink: _openAssessmentLink,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _confirmBilling() async {
+    if (_billingAccepted) return true;
+    SharedPreferences? preferences;
+    try {
+      preferences = await SharedPreferences.getInstance();
+      if (preferences.getBool(_billingNoticeKey) ?? false) return true;
+    } catch (_) {
+      // The notice still works if the preference store is unavailable.
+    }
+    if (!mounted || _resourcesReleased) return false;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('首次使用豆包发音指导'),
+        scrollable: true,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(_estimatedUsage),
+            const SizedBox(height: 10),
+            const Text(
+              '继续会把本句字幕、视频原声和你的录音发给火山方舟。费用记在你自己的账号，按实际用量扣费。设备会朗读豆包给出的指导。',
+            ),
+            _buildHelpLinks(context),
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('同意并获取指导'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted || _resourcesReleased) return false;
+    _billingAccepted = true;
+    try {
+      await preferences?.setBool(_billingNoticeKey, true);
+    } catch (_) {
+      // Confirmation remains valid for the current recording dialog.
+    }
+    return true;
+  }
+
+  Future<bool> _openAssessmentLink(BuildContext context, String url) async {
+    _viewingAssessmentLink = !_recordingActive && !_finishingRecording;
+    final bool opened = await openPronunciationLink(context, url);
+    if (!opened) _viewingAssessmentLink = false;
+    return opened;
+  }
+
+  Widget _buildHelpLinks(BuildContext context) => Wrap(
+    alignment: WrapAlignment.center,
+    children: <Widget>[
+      TextButton(
+        onPressed: () =>
+            showPronunciationHelp(context, openLink: _openAssessmentLink),
+        child: const Text('跟读指导帮助'),
+      ),
+      TextButton(
+        onPressed: () =>
+            _openAssessmentLink(context, doubaoPronunciationBillingUrl),
+        child: const Text('火山方舟计费说明'),
+      ),
+    ],
+  );
 
   Future<void> _deleteRecordingFile() async {
     final String? path = _recordingPath;
@@ -506,6 +735,8 @@ class _PronunciationAssessmentDialogState
         await cancelAssessment();
       } catch (_) {}
     }
+    final Future<void> Function()? stopSpeech = _stopFeedbackSpeech;
+    if (stopSpeech != null) await _runCleanup(stopSpeech);
     final Future<void> Function()? cancelExtraction = _cancelExtraction;
     _cancelExtraction = null;
     if (cancelExtraction != null) {
@@ -533,9 +764,10 @@ class _PronunciationAssessmentDialogState
         _recording = null;
         _result = null;
         _assessing = false;
+        _sendingAssessment = false;
         _recordingActive = false;
         _loadingReference = false;
-        _message = '应用进入后台，录音与临时音频已清理。请关闭后重新打开此评测窗口。';
+        _message = '应用进入后台，录音与临时音频已清理。请关闭后重新打开跟读对照。';
       });
     }
   }
@@ -563,6 +795,7 @@ class _PronunciationAssessmentDialogState
         !_resourcesReleased &&
         !_closing &&
         !_assessing &&
+        !_showingResult &&
         !_finishingRecording) {
       unawaited(_recordingActive ? _stopRecording() : _startRecording());
     }
@@ -628,6 +861,22 @@ class _PronunciationAssessmentDialogState
                                     _buildComparison(compact),
                                     const SizedBox(height: 24),
                                     _buildActions(),
+                                    if (pronunciationCoachingEnabled) ...<
+                                      Widget
+                                    >[
+                                      const SizedBox(height: 8),
+                                      if (_result == null && _recording != null)
+                                        Text(
+                                          _estimatedUsage,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            color: Color(0xFFD6E3EC),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      if (!_recordingActive && !_assessing)
+                                        _buildHelpLinks(context),
+                                    ],
                                     if (!compact) ...<Widget>[
                                       const SizedBox(height: 10),
                                       const Text(
@@ -651,16 +900,28 @@ class _PronunciationAssessmentDialogState
                                           height: 1.5,
                                         ),
                                       ),
-                                    ],
-                                    if (pronunciationScoringEnabled &&
-                                        _result != null) ...<Widget>[
-                                      const SizedBox(height: 28),
-                                      _buildResult(_result!),
+                                      if (!_resourcesReleased &&
+                                          !_recordingActive &&
+                                          _showCloudSetup)
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: TextButton.icon(
+                                            onPressed: () =>
+                                                _openAssessmentLink(
+                                                  context,
+                                                  doubaoPronunciationConsoleUrl,
+                                                ),
+                                            icon: const Icon(
+                                              Icons.open_in_new_rounded,
+                                            ),
+                                            label: const Text('打开火山方舟'),
+                                          ),
+                                        ),
                                     ],
                                     const SizedBox(height: 20),
                                     const Text(
-                                      pronunciationScoringEnabled
-                                          ? '录音与波形在本地处理。点击「获取评分」才会发送本次录音及字幕至腾讯云，并按账号计费。密钥可在「设置 · 跟读评测」中配置。'
+                                      pronunciationCoachingEnabled
+                                          ? '录音和回听在本机进行。获取指导时会把本句原声、你的录音和字幕发给火山方舟。'
                                           : '录音与波形仅在本机处理。可反复录制、回放并与视频原声对照。',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
@@ -828,8 +1089,8 @@ class _PronunciationAssessmentDialogState
         ),
         const SizedBox(height: 6),
         const Text(
-          pronunciationScoringEnabled
-              ? '叠加波形对照节奏与停顿；发音评分依据字幕和标准读音。'
+          pronunciationCoachingEnabled
+              ? '叠加波形对照节奏与停顿。'
               : '叠加波形对照节奏与停顿，可分别回放原声和你的录音。',
           textAlign: TextAlign.center,
           style: TextStyle(color: Color(0xFFD6E3EC), fontSize: 12, height: 1.5),
@@ -910,7 +1171,11 @@ class _PronunciationAssessmentDialogState
       else
         FilledButton.icon(
           key: const ValueKey<String>('pronunciation-record-start'),
-          onPressed: _resourcesReleased || _finishingRecording || _assessing
+          onPressed:
+              _resourcesReleased ||
+                  _finishingRecording ||
+                  _assessing ||
+                  _showingResult
               ? null
               : () => unawaited(_startRecording()),
           icon: Icon(
@@ -923,19 +1188,21 @@ class _PronunciationAssessmentDialogState
             minimumSize: const Size(156, 52),
           ),
         ),
-      if (pronunciationScoringEnabled)
+      if (pronunciationCoachingEnabled)
         FilledButton.icon(
-          key: const ValueKey<String>('pronunciation-score-button'),
+          key: const ValueKey<String>('pronunciation-guidance-button'),
           onPressed:
               _recording == null ||
-                  _result != null ||
                   _recordingActive ||
                   _finishingRecording ||
                   _assessing ||
+                  _showingResult ||
                   _resourcesReleased
               ? null
-              : () => unawaited(_score()),
-          icon: _assessing
+              : () => unawaited(
+                  _result == null ? _requestGuidance() : _showResult(),
+                ),
+          icon: _sendingAssessment
               ? const SizedBox(
                   width: 17,
                   height: 17,
@@ -944,15 +1211,29 @@ class _PronunciationAssessmentDialogState
                     color: Colors.white,
                   ),
                 )
-              : const Icon(Icons.fact_check_outlined),
+              : const Icon(Icons.record_voice_over_outlined),
           label: Text(
-            _result != null ? '已评分' : (_assessing ? '正在评分…' : '获取评分'),
+            _result != null ? '查看指导' : (_sendingAssessment ? '正在听录音…' : '获取指导'),
           ),
           style: FilledButton.styleFrom(
             backgroundColor: _originalColor,
             foregroundColor: const Color(0xFF092333),
             minimumSize: const Size(156, 52),
           ),
+        ),
+      if (_history.isNotEmpty)
+        OutlinedButton.icon(
+          onPressed:
+              _recordingActive ||
+                  _finishingRecording ||
+                  _assessing ||
+                  _showingResult ||
+                  _resourcesReleased
+              ? null
+              : () => unawaited(_showHistory()),
+          icon: const Icon(Icons.history_rounded),
+          label: const Text('练习记录'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size(156, 52)),
         ),
       if (_finishingRecording)
         const SizedBox(
@@ -963,42 +1244,359 @@ class _PronunciationAssessmentDialogState
     ],
   );
 
-  Widget _buildResult(PronunciationAssessmentResult result) => _CardSurface(
+  Future<void> _showHistory() async {
+    final PronunciationHistoryEntry?
+    entry = await showDialog<PronunciationHistoryEntry>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('本句练习记录'),
+        scrollable: true,
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final (int index, PronunciationHistoryEntry entry)
+                  in _history.indexed)
+                ListTile(
+                  title: Text(
+                    index == 0
+                        ? '第 ${_history.length} 次 · 最近一次'
+                        : '第 ${_history.length - index} 次',
+                  ),
+                  subtitle: Text(
+                    '${MaterialLocalizations.of(context).formatCompactDate(entry.recordedAt)} '
+                    '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(entry.recordedAt))}',
+                  ),
+                  trailing: entry.result.guidance == null
+                      ? Text(
+                          '评分 ${_formatMetric(entry.result.suggestedScore, max: 100)}',
+                        )
+                      : null,
+                  onTap: () => Navigator.of(context).pop(entry),
+                ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+    if (mounted && !_resourcesReleased && entry != null) {
+      await _showResult(historyEntry: entry);
+    }
+  }
+
+  Future<void> _showResult({
+    bool readFeedback = false,
+    PronunciationHistoryEntry? historyEntry,
+  }) async {
+    final PronunciationAssessmentResult? result =
+        historyEntry?.result ?? _result;
+    if (_showingResult || result == null) return;
+    final int historyIndex = _history.indexWhere(
+      (PronunciationHistoryEntry entry) => historyEntry == null
+          ? identical(entry.result, result)
+          : entry.directory.path == historyEntry.directory.path,
+    );
+    final int previousIndex = historyIndex + 1;
+    final double? previousScore =
+        result.guidance == null && previousIndex < _history.length
+        ? _history[previousIndex].result.suggestedScore
+        : null;
+    setState(() => _showingResult = true);
+    final ({String text, String speech}) feedback = pronunciationFeedback(
+      result,
+    );
+    final WordPronunciationService speech = ref.read(
+      pronunciationFeedbackSpeechProvider,
+    );
+    Directory? excerpts;
+    Future<void>? playback;
+    bool closed = false;
+    bool speaking = false;
+    int speechAttempt = 0;
+    Future<void>? stoppingSpeech;
+    Future<void> stopSpeech() async {
+      speechAttempt++;
+      if (!speaking) {
+        await stoppingSpeech;
+        return;
+      }
+      speaking = false;
+      final Future<void> stop = _runCleanup(speech.stop);
+      stoppingSpeech = stop;
+      await stop;
+      stoppingSpeech = null;
+    }
+
+    _stopFeedbackSpeech = stopSpeech;
+    try {
+      final String? recordingPath =
+          historyEntry?.recordingFile.path ?? _recordingPath;
+      Pcm16MonoAudio? recording = _recording;
+      if (historyEntry != null) {
+        try {
+          recording = Pcm16MonoAudio.parseWav(
+            await historyEntry.recordingFile.readAsBytes(),
+          );
+        } on FileSystemException {
+          recording = null;
+        } on FormatException {
+          recording = null;
+        }
+      }
+      await _stopResultPlayback();
+      if (!mounted || _resourcesReleased) return;
+      final ThemeData theme = Theme.of(context);
+      String? playbackError;
+      String? speechError;
+      bool autoReadPending = readFeedback;
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext context) => Theme(
+          data: ThemeData.dark(useMaterial3: true).copyWith(
+            textTheme: ThemeData.dark().textTheme.apply(
+              fontFamily: theme.textTheme.bodyMedium?.fontFamily,
+            ),
+          ),
+          child: StatefulBuilder(
+            builder: (BuildContext context, StateSetter update) {
+              Future<void> readHint() async {
+                if (!context.mounted ||
+                    closed ||
+                    _resourcesReleased ||
+                    speaking ||
+                    playback != null) {
+                  return;
+                }
+                final int attempt = ++speechAttempt;
+                update(() {
+                  speaking = true;
+                  speechError = null;
+                });
+                try {
+                  await stoppingSpeech;
+                  await _previewPlayer.stop();
+                  if (attempt != speechAttempt ||
+                      closed ||
+                      _resourcesReleased) {
+                    return;
+                  }
+                  await speech.speak(
+                    feedback.speech,
+                    language: 'zh-CN',
+                    speechTimeout: const Duration(seconds: 35),
+                  );
+                } catch (_) {
+                  if (context.mounted && attempt == speechAttempt) {
+                    update(() => speechError = '无法使用设备的中文朗读，可直接查看文字提示。');
+                  }
+                } finally {
+                  if (context.mounted && attempt == speechAttempt) {
+                    update(() => speaking = false);
+                  }
+                }
+              }
+
+              if (autoReadPending) {
+                autoReadPending = false;
+                WidgetsBinding.instance.addPostFrameCallback(
+                  (_) => unawaited(readHint()),
+                );
+              }
+
+              void play(String? path, {Pcm16MonoAudio? excerpt}) {
+                if (playback != null || closed || _resourcesReleased) return;
+                update(() => playbackError = null);
+                playback = () async {
+                  try {
+                    await stopSpeech();
+                    if (context.mounted && !closed) update(() {});
+                    String? source = path;
+                    if (excerpt != null) {
+                      excerpts ??= await (await getTemporaryDirectory())
+                          .createTemp('pronunciation-excerpts-');
+                      final File file = File('${excerpts!.path}/excerpt.wav');
+                      await _previewPlayer.stop();
+                      await file.writeAsBytes(excerpt.toWav());
+                      source = file.path;
+                    }
+                    if (!closed && !_resourcesReleased && source != null) {
+                      await _previewPlayer.playLocalFile(source);
+                    }
+                  } catch (_) {
+                    if (context.mounted && !closed) {
+                      update(() => playbackError = '无法播放这段音频。');
+                    }
+                  }
+                }().whenComplete(() => playback = null);
+              }
+
+              VoidCallback? replay(
+                PronunciationAudioRange? range,
+                int paddingMs,
+              ) {
+                final Pcm16MonoAudio? audio = recording;
+                if (range == null ||
+                    audio == null ||
+                    !range.fits(audio.durationMs)) {
+                  return null;
+                }
+                return () => play(
+                  null,
+                  excerpt: audio.excerpt(range, paddingMs: paddingMs),
+                );
+              }
+
+              return AlertDialog(
+                title: Text(result.guidance == null ? '历史发音评分' : '发音指导'),
+                scrollable: true,
+                content: SizedBox(
+                  width: 620,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(widget.target.text),
+                      if (previousScore != null) ...<Widget>[
+                        const SizedBox(height: 6),
+                        Text(
+                          '上次得分 ${_formatMetric(previousScore, max: 100)}',
+                          style: const TextStyle(color: Color(0xFFD6E3EC)),
+                        ),
+                      ],
+                      Wrap(
+                        spacing: 8,
+                        children: <Widget>[
+                          if (_reference != null)
+                            TextButton.icon(
+                              onPressed: () => play(_reference?.path),
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label: const Text('听原声整句'),
+                            ),
+                          if (recording != null && recordingPath != null)
+                            TextButton.icon(
+                              onPressed: () => play(recordingPath),
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label: const Text('听我的整句'),
+                            ),
+                        ],
+                      ),
+                      if (playbackError != null) Text(playbackError!),
+                      if (recording == null) const Text('这条记录的录音不可用。'),
+                      _CardSurface(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            TextButton.icon(
+                              onPressed: speaking
+                                  ? () {
+                                      unawaited(stopSpeech());
+                                      update(() {});
+                                    }
+                                  : () => unawaited(readHint()),
+                              icon: Icon(
+                                speaking
+                                    ? Icons.stop_rounded
+                                    : Icons.volume_up_rounded,
+                              ),
+                              label: Text(speaking ? '停止朗读' : '听发音指导'),
+                            ),
+                            Text(feedback.text),
+                            if (speechError != null) Text(speechError!),
+                          ],
+                        ),
+                      ),
+                      if (result.guidance == null) ...<Widget>[
+                        const SizedBox(height: 8),
+                        _buildResult(result, replay: replay),
+                      ],
+                    ],
+                  ),
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('关闭'),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      );
+    } finally {
+      closed = true;
+      _stopFeedbackSpeech = null;
+      await stopSpeech();
+      await playback;
+      await _stopResultPlayback();
+      final Directory? directory = excerpts;
+      if (directory != null) {
+        await _runCleanup(() async => directory.delete(recursive: true));
+      }
+      if (mounted && !_resourcesReleased) {
+        setState(() => _showingResult = false);
+      }
+    }
+  }
+
+  Future<void> _stopResultPlayback() async {
+    if (_resourcesReleased) return;
+    await _runCleanup(_previewPlayer.stop);
+    if (mounted && !_resourcesReleased) {
+      setState(() {
+        _playingPath = null;
+        _previewPositionMs = 0;
+      });
+    }
+  }
+
+  Widget _buildResult(
+    PronunciationAssessmentResult result, {
+    required VoidCallback? Function(PronunciationAudioRange?, int) replay,
+  }) => _CardSurface(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const _SectionTitle('腾讯云发音评分'),
-        const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final double width = (constraints.maxWidth - 8) / 2;
-            return Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: <Widget>[
-                _MetricTile(
-                  width: width,
-                  title: '建议评分',
-                  value: _formatMetric(result.suggestedScore, max: 100),
-                ),
-                _MetricTile(
-                  width: width,
-                  title: '准确度',
-                  value: _formatMetric(result.accuracy, max: 100),
-                ),
-                _MetricTile(
-                  width: width,
-                  title: '流利度',
-                  value: _formatMetric(result.fluency, max: 1),
-                ),
-                _MetricTile(
-                  width: width,
-                  title: '完整度',
-                  value: _formatMetric(result.completion, max: 1),
-                ),
-              ],
-            );
-          },
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _MetricTile(
+                title: '建议评分',
+                value: _formatMetric(result.suggestedScore, max: 100),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _MetricTile(
+                title: '准确度',
+                value: _formatMetric(result.accuracy, max: 100),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _MetricTile(
+                title: '流利度',
+                value: _formatMetric(result.fluency, max: 1),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _MetricTile(
+                title: '完整度',
+                value: _formatMetric(result.completion, max: 1),
+              ),
+            ),
+          ],
         ),
         if (result.words.isNotEmpty) ...<Widget>[
           const SizedBox(height: 12),
@@ -1006,29 +1604,50 @@ class _PronunciationAssessmentDialogState
             '逐词结果',
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
           ),
+          const Text(
+            '高亮项建议复练。点带播放图标的词或音素，回听自己的录音片段。',
+            style: TextStyle(color: Color(0xFFD6E3EC), fontSize: 12),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 6,
             runSpacing: 6,
-            children: result.words.map(_wordChip).toList(growable: false),
+            children: <Widget>[
+              for (final PronunciationWordResult word in result.words)
+                _wordChip(word, replay: replay),
+            ],
           ),
         ],
       ],
     ),
   );
 
-  Widget _wordChip(PronunciationWordResult word) {
+  Widget _wordChip(
+    PronunciationWordResult word, {
+    required VoidCallback? Function(PronunciationAudioRange?, int) replay,
+  }) {
+    final String reference = word.referenceWord.replaceFirst(
+      RegExp(r'_\d+$'),
+      '',
+    );
+    final String spoken = word.word == '*' ? '' : word.word;
+    final bool needsReview =
+        (word.accuracy ?? 100) < pronunciationReviewThreshold ||
+        word.phones.any(
+          (PronunciationPhoneResult phone) =>
+              (phone.accuracy ?? 100) < pronunciationReviewThreshold,
+        );
     final String label = switch (word.matchTag) {
-      2 => word.referenceWord.isEmpty ? '漏读' : word.referenceWord,
-      1 => word.word.isEmpty ? '新增' : word.word,
-      3 => word.word.isEmpty ? '错读' : word.word,
-      4 => word.word.isEmpty ? '未录入' : word.word,
-      _ => word.word.isEmpty ? word.referenceWord : word.word,
+      2 => reference.isEmpty || reference == '*' ? '漏读' : '$reference · 漏读',
+      1 => spoken.isEmpty ? '多读' : '$spoken · 多读',
+      _ => spoken.isEmpty ? reference : spoken,
     };
     final Color color = switch (word.matchTag) {
       1 => const Color(0xFFFFCE90),
       2 || 3 => const Color(0xFFFFB5AC),
       4 => const Color(0xFFD6E3EC),
+      _ when needsReview => const Color(0xFFFFB5AC),
+      _ when word.accuracy == null => const Color(0xFFD6E3EC),
       _ => const Color(0xFF8EDAB7),
     };
     final String detail = switch (word.matchTag) {
@@ -1036,7 +1655,8 @@ class _PronunciationAssessmentDialogState
       2 => '缺少单词',
       3 => '错读的词',
       4 => '未录入单词',
-      _ => '匹配单词',
+      _ when needsReview => '建议复练',
+      _ => '发音准确度',
     };
     return Tooltip(
       message: detail,
@@ -1047,15 +1667,59 @@ class _PronunciationAssessmentDialogState
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withValues(alpha: 0.28)),
         ),
-        child: Text(
-          '${label.isEmpty ? '—' : label}${word.accuracy == null ? '' : ' ${word.accuracy!.round()}'}',
-          style: TextStyle(
-            color: color,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _replayLabel(
+              '${label.isEmpty ? '—' : label}${word.accuracy == null ? '' : ' ${word.accuracy!.round()}'}',
+              color: color,
+              onPlay: replay(word.audioRange, 60),
+            ),
+            if (word.phones.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: <Widget>[
+                  for (final PronunciationPhoneResult phone in word.phones)
+                    _replayLabel(
+                      phone.detectedLabel == null
+                          ? '${phone.label} ${phone.accuracy?.round() ?? '—'}'
+                          : '${phone.label} ${phone.accuracy?.round() ?? '—'}（听起来像 ${phone.detectedLabel}）',
+                      color:
+                          (phone.accuracy ?? 100) < pronunciationReviewThreshold
+                          ? const Color(0xFFFFB5AC)
+                          : const Color(0xFFD6E3EC),
+                      onPlay: replay(phone.audioRange, 100),
+                    ),
+                ],
+              ),
+            ],
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _replayLabel(
+    String label, {
+    required Color color,
+    VoidCallback? onPlay,
+  }) {
+    final Widget text = Text(
+      label,
+      style: TextStyle(color: color, fontSize: 12),
+    );
+    if (onPlay == null) return text;
+    return TextButton.icon(
+      onPressed: onPlay,
+      style: TextButton.styleFrom(
+        foregroundColor: color,
+        minimumSize: const Size(44, 40),
+      ),
+      icon: const Icon(Icons.play_arrow_rounded, size: 16),
+      label: text,
     );
   }
 }
@@ -1072,22 +1736,6 @@ class _CardSurface extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
     ),
     child: Padding(padding: const EdgeInsets.all(12), child: child),
-  );
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Text(
-    text,
-    style: const TextStyle(
-      color: Color(0xFFF1F7FC),
-      fontSize: 14,
-      fontWeight: FontWeight.w800,
-    ),
   );
 }
 
@@ -1193,40 +1841,31 @@ class _ComparisonWaveformPainter extends CustomPainter {
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({
-    required this.width,
-    required this.title,
-    required this.value,
-  });
-
-  final double width;
+  const _MetricTile({required this.title, required this.value});
   final String title;
   final String value;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: width,
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0x303B5262),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              title,
-              style: const TextStyle(fontSize: 11, color: Color(0xFFD6E3EC)),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: const Color(0x303B5262),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            title,
+            style: const TextStyle(fontSize: 11, color: Color(0xFFD6E3EC)),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+          ),
+        ],
       ),
     ),
   );

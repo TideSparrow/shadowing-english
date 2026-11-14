@@ -60,11 +60,7 @@ void main() {
     );
     await first
         .read(pronunciationCredentialsProvider.notifier)
-        .saveCredentials(
-          appId: ' 1250000000 ',
-          secretId: ' test-id ',
-          secretKey: ' test-key ',
-        );
+        .saveCredentials(apiKey: ' test-key ');
     first.dispose();
     containers.remove(first);
     await Hive.box<String>('prefs').close();
@@ -75,24 +71,19 @@ void main() {
     final PronunciationCredentials restored = await reopened.read(
       pronunciationCredentialsProvider.future,
     );
-    expect(restored.appId, '1250000000');
-    expect(restored.secretId, 'test-id');
-    expect(restored.secretKey, 'test-key');
+
+    expect(restored.apiKey, 'test-key');
     for (int i = 0; i < 3; i++) {
       expect(
-        (await reopened.read(
-          pronunciationCredentialsProvider.future,
-        )).secretKey,
+        (await reopened.read(pronunciationCredentialsProvider.future)).apiKey,
         'test-key',
       );
     }
     await reopened
         .read(pronunciationCredentialsProvider.notifier)
-        .saveCredentials(appId: '', secretId: '', secretKey: '');
+        .saveCredentials(apiKey: '');
     expect(
-      Hive.box<String>(
-        'prefs',
-      ).containsKey('pronunciation.tencent.credentials.v1'),
+      Hive.box<String>('prefs').containsKey('pronunciation.doubao.apiKey.v1'),
       isFalse,
     );
     expect(
@@ -111,11 +102,7 @@ void main() {
       pronunciationCredentialsProvider.notifier,
     );
     await expectLater(
-      notifier.saveCredentials(
-        appId: '1250000000',
-        secretId: 'test-id',
-        secretKey: 'test-key',
-      ),
+      notifier.saveCredentials(apiKey: 'test-key'),
       throwsStateError,
     );
     expect(
@@ -123,11 +110,7 @@ void main() {
       isFalse,
     );
     await Hive.openBox<String>('prefs');
-    await notifier.saveCredentials(
-      appId: '1250000000',
-      secretId: 'test-id',
-      secretKey: 'test-key',
-    );
+    await notifier.saveCredentials(apiKey: 'test-key');
     expect(
       container.read(pronunciationCredentialsProvider).requireValue.isComplete,
       isTrue,

@@ -8,6 +8,8 @@ class PronunciationAssessmentTarget {
     required this.startMs,
     required this.endMs,
     required this.videoDuration,
+    this.subtitleStartMs,
+    this.subtitleEndMs,
   });
 
   final String text;
@@ -15,53 +17,34 @@ class PronunciationAssessmentTarget {
   final int startMs;
   final int endMs;
   final Duration videoDuration;
+  final int? subtitleStartMs;
+  final int? subtitleEndMs;
 
   String? get validationError {
-    if (text.trim().isEmpty || !_containsEnglish(text)) return '当前句没有可评测的英文字幕。';
-    if (startMs < 0 || endMs <= startMs) return '字幕时间无效，暂时无法评测。';
+    if (text.trim().isEmpty || !_containsEnglish(text)) {
+      return '当前句没有可供跟读的英文字幕。';
+    }
+    if (startMs < 0 || endMs <= startMs) return '字幕时间无效，暂时无法跟读。';
     if (videoDuration <= Duration.zero) return '视频时长暂不可用。';
     if (startMs >= videoDuration.inMilliseconds) return '字幕超出视频范围。';
-    if (endMs - startMs > 60000) return '单句片段超过 60 秒，暂不支持评测。';
-    if (wordCount > 120) return '这句超过 120 个英文单词，暂不支持评测。';
+    if (endMs - startMs > 60000) return '单句片段超过 60 秒，暂不支持跟读。';
+    if (wordCount > 120) return '这句超过 120 个英文单词，暂不支持跟读。';
     return null;
   }
 
   int get wordCount =>
       RegExp("[A-Za-z]+(?:['’][A-Za-z]+)?").allMatches(text).length;
 
-  int get evaluationMode => wordCount > 30 ? 2 : 1;
-
   static bool _containsEnglish(String value) =>
       RegExp('[A-Za-z]').hasMatch(value);
 }
 
 class PronunciationCredentials {
-  const PronunciationCredentials({
-    this.appId = '',
-    this.secretId = '',
-    this.secretKey = '',
-  });
+  const PronunciationCredentials({this.apiKey = ''});
 
-  final String appId;
-  final String secretId;
-  final String secretKey;
+  final String apiKey;
 
-  bool get isComplete =>
-      appId.trim().isNotEmpty &&
-      secretId.trim().isNotEmpty &&
-      secretKey.trim().isNotEmpty;
-
-  PronunciationCredentials copyWith({
-    String? appId,
-    String? secretId,
-    String? secretKey,
-  }) {
-    return PronunciationCredentials(
-      appId: appId ?? this.appId,
-      secretId: secretId ?? this.secretId,
-      secretKey: secretKey ?? this.secretKey,
-    );
-  }
+  bool get isComplete => apiKey.trim().isNotEmpty;
 }
 
 class PronunciationWordResult {
@@ -70,16 +53,50 @@ class PronunciationWordResult {
     required this.referenceWord,
     required this.matchTag,
     this.accuracy,
+    this.audioRange,
+    this.phones = const <PronunciationPhoneResult>[],
   });
 
   final String word;
   final String referenceWord;
   final int matchTag;
   final double? accuracy;
+  final PronunciationAudioRange? audioRange;
+  final List<PronunciationPhoneResult> phones;
+}
+
+class PronunciationPhoneResult {
+  const PronunciationPhoneResult({
+    required this.label,
+    this.accuracy,
+    this.audioRange,
+    this.detectedLabel,
+  });
+
+  final String label;
+  final double? accuracy;
+  final PronunciationAudioRange? audioRange;
+  final String? detectedLabel;
+}
+
+class PronunciationAudioRange {
+  const PronunciationAudioRange(this.startMs, this.endMs);
+
+  final int startMs;
+  final int endMs;
+
+  static PronunciationAudioRange? fromTimestamps(Object? start, Object? end) {
+    if (start is! int || end is! int || start < 0 || end <= start) return null;
+    return PronunciationAudioRange(start, end);
+  }
+
+  bool fits(int durationMs) =>
+      startMs >= 0 && startMs < durationMs && endMs > startMs;
 }
 
 class PronunciationAssessmentResult {
   const PronunciationAssessmentResult({
+    this.guidance,
     this.suggestedScore,
     this.accuracy,
     this.fluency,
@@ -87,14 +104,49 @@ class PronunciationAssessmentResult {
     this.words = const <PronunciationWordResult>[],
   });
 
+  final String? guidance;
   final double? suggestedScore;
   final double? accuracy;
   final double? fluency;
   final double? completion;
   final List<PronunciationWordResult> words;
 
+  Map<String, Object?> toJson() => guidance != null
+      ? <String, Object?>{'guidance': guidance}
+      : <String, Object?>{
+          'SuggestedScore': suggestedScore,
+          'PronAccuracy': accuracy,
+          'PronFluency': fluency,
+          'PronCompletion': completion,
+          'Words': <Object>[
+            for (final PronunciationWordResult word in words)
+              <String, Object?>{
+                'Word': word.word,
+                'ReferenceWord': word.referenceWord,
+                'MatchTag': word.matchTag,
+                'PronAccuracy': word.accuracy,
+                'MemBeginTime': word.audioRange?.startMs,
+                'MemEndTime': word.audioRange?.endMs,
+                'PhoneInfos': <Object>[
+                  for (final PronunciationPhoneResult phone in word.phones)
+                    <String, Object?>{
+                      'Phone': phone.detectedLabel ?? phone.label,
+                      'ReferencePhone': phone.label,
+                      'PronAccuracy': phone.accuracy,
+                      'MemBeginTime': phone.audioRange?.startMs,
+                      'MemEndTime': phone.audioRange?.endMs,
+                    },
+                ],
+              },
+          ],
+        };
+
   static PronunciationAssessmentResult? tryParse(Object? raw) {
     if (raw is! Map) return null;
+    final Object? guidance = raw['guidance'];
+    if (guidance is String && guidance.trim().isNotEmpty) {
+      return PronunciationAssessmentResult(guidance: guidance.trim());
+    }
     final Map<String, Object?> value = <String, Object?>{
       for (final MapEntry<Object?, Object?> entry in raw.entries)
         if (entry.key is String) entry.key! as String: entry.value,
@@ -121,12 +173,51 @@ class PronunciationAssessmentResult {
         final int tag = rawTag is num ? rawTag.toInt() : -1;
         final Object? rawWord = item['Word'];
         final Object? rawReference = item['ReferenceWord'];
+        final List<PronunciationPhoneResult> phones =
+            <PronunciationPhoneResult>[];
+        final Object? rawPhones = item['PhoneInfos'] ?? item['PhoneInfo'];
+        if (rawPhones is List) {
+          for (final Object? phone in rawPhones) {
+            if (phone is! Map) continue;
+            final Object? rawReference = phone['ReferencePhone'];
+            final String reference = rawReference is String
+                ? rawReference.trim()
+                : '';
+            final Object? rawActual = phone['Phone'];
+            final String actual = rawActual is String ? rawActual.trim() : '';
+            final String label = reference.isNotEmpty && reference != '*'
+                ? reference
+                : actual;
+            if (label.isEmpty || label == '*') continue;
+            phones.add(
+              PronunciationPhoneResult(
+                label: label,
+                detectedLabel:
+                    actual.isNotEmpty && actual != '*' && actual != label
+                    ? actual
+                    : null,
+                accuracy: number(phone['PronAccuracy'], max: 100),
+                audioRange: PronunciationAudioRange.fromTimestamps(
+                  phone['MemBeginTime'] ?? phone['Mbtm'],
+                  phone['MemEndTime'] ?? phone['Metm'],
+                ),
+              ),
+            );
+          }
+        }
         words.add(
           PronunciationWordResult(
             word: rawWord is String ? rawWord : '',
             referenceWord: rawReference is String ? rawReference : '',
             matchTag: tag,
             accuracy: number(item['PronAccuracy'], max: 100),
+            audioRange: tag == 2
+                ? null
+                : PronunciationAudioRange.fromTimestamps(
+                    item['MemBeginTime'] ?? item['Mbtm'],
+                    item['MemEndTime'] ?? item['Metm'],
+                  ),
+            phones: List<PronunciationPhoneResult>.unmodifiable(phones),
           ),
         );
       }
@@ -200,6 +291,19 @@ class Pcm16MonoAudio {
 
   int get durationMs =>
       sampleRate <= 0 ? 0 : (bytes.length * 1000) ~/ (sampleRate * 2);
+
+  Pcm16MonoAudio? excerpt(PronunciationAudioRange range, {int paddingMs = 0}) {
+    if (!range.fits(durationMs)) return null;
+    final int padding = math.max(0, paddingMs);
+    final int startMs = math.max(0, range.startMs - padding);
+    final int endMs = math.min(durationMs, range.endMs + padding);
+    final int start = (startMs * sampleRate ~/ 1000) * 2;
+    final int end = (endMs * sampleRate ~/ 1000) * 2;
+    return Pcm16MonoAudio(
+      bytes: Uint8List.sublistView(bytes, start, end),
+      sampleRate: sampleRate,
+    );
+  }
 
   /// Discards only leading quiet audio. Internal pauses and real timing remain.
   /// Three active 10 ms frames reject isolated clicks; 20 ms of pre-roll

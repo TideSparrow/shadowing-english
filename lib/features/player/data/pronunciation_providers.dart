@@ -6,18 +6,20 @@ import 'package:media_kit/media_kit.dart';
 import 'package:record/record.dart';
 
 import '../domain/pronunciation_assessment.dart';
+import 'doubao_pronunciation_service.dart';
 import 'pronunciation_audio_extractor.dart';
-import 'tencent_pronunciation_service.dart';
 
 final Provider<PronunciationAudioExtractor>
 pronunciationAudioExtractorProvider = Provider<PronunciationAudioExtractor>(
   (Ref ref) => PronunciationAudioExtractor(),
 );
 
-final Provider<TencentPronunciationService>
-tencentPronunciationServiceProvider = Provider<TencentPronunciationService>(
-  (Ref ref) => TencentPronunciationService(),
-);
+final Provider<DoubaoPronunciationService> doubaoPronunciationServiceProvider =
+    Provider<DoubaoPronunciationService>((Ref ref) {
+      final DoubaoPronunciationService service = DoubaoPronunciationService();
+      ref.onDispose(service.close);
+      return service;
+    });
 
 abstract interface class PronunciationMicrophone {
   Future<bool> requestPermission();

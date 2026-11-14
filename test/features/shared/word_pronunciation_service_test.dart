@@ -1,4 +1,5 @@
 import 'package:common_learn_english/features/shared/data/word_pronunciation_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -79,6 +80,31 @@ void main() {
 
     expect(calls.single.method, 'stop');
   });
+
+  test(
+    'requests an offline voice for Android pronunciation feedback',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      const MethodChannel channel = MethodChannel('test_offline_pronunciation');
+      final List<MethodCall> calls = <MethodCall>[];
+      final TestDefaultBinaryMessenger messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            ..setMockMethodCallHandler(channel, (MethodCall call) async {
+              calls.add(call);
+              return true;
+            });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+      await WordPronunciationService(
+        offlineOnly: true,
+        ttsClient: WordPronunciationTtsClient(nativeChannel: channel),
+      ).speak('嘴张大一些。', language: 'zh-CN');
+
+      expect(calls.single.arguments, containsPair('offlineOnly', true));
+      expect(calls.single.arguments, containsPair('language', 'zh-CN'));
+    },
+  );
 
   test('uses requested language before speaking', () async {
     final _FakeWordPronunciationTtsClient client =

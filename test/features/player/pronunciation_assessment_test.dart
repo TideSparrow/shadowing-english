@@ -1,11 +1,32 @@
 import 'dart:typed_data';
 
 import 'package:common_learn_english/features/player/domain/pronunciation_assessment.dart';
+import 'package:common_learn_english/features/player/domain/pronunciation_feedback.dart';
 import 'package:common_learn_english/features/player/presentation/player_mock_state.dart';
 import 'package:common_learn_english/features/player/presentation/pronunciation_target_selection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('gives a positive voice response only when scores are available', () {
+    final ({String text, String speech}) good = pronunciationFeedback(
+      const PronunciationAssessmentResult(
+        accuracy: 94,
+        fluency: 0.9,
+        completion: 1,
+      ),
+    );
+    expect(good.speech, contains('没发现明显问题'));
+    expect(
+      pronunciationFeedback(const PronunciationAssessmentResult()).speech,
+      contains('数据不够'),
+    );
+    expect(
+      pronunciationFeedback(
+        const PronunciationAssessmentResult(accuracy: 94, completion: 0.6),
+      ).speech,
+      contains('再读完整一点'),
+    );
+  });
   test(
     'sound alignment removes leading silence and clicks, preserves pauses',
     () {

@@ -18,7 +18,7 @@ class _MemoryCredentialStore implements PronunciationCredentialStore {
 
 void main() {
   test(
-    'Tencent pronunciation credentials are independent and reopenable',
+    'Ark pronunciation credentials are independent and reopenable',
     () async {
       final _MemoryCredentialStore store = _MemoryCredentialStore();
       final ProviderContainer first = ProviderContainer(
@@ -31,15 +31,11 @@ void main() {
       await first.read(pronunciationCredentialsProvider.future);
       await first
           .read(pronunciationCredentialsProvider.notifier)
-          .saveCredentials(
-            appId: '1250000000',
-            secretId: 'test-secret-id',
-            secretKey: 'test-secret-key',
-          );
+          .saveCredentials(apiKey: 'test-secret-key');
 
       expect(store.value.isComplete, isTrue);
       expect(
-        first.read(pronunciationCredentialsProvider).value?.secretKey,
+        first.read(pronunciationCredentialsProvider).value?.apiKey,
         'test-secret-key',
       );
 
@@ -52,19 +48,14 @@ void main() {
       final PronunciationCredentials restored = await reopened.read(
         pronunciationCredentialsProvider.future,
       );
-      expect(restored.appId, '1250000000');
-      expect(restored.secretId, 'test-secret-id');
-      expect(restored.secretKey, 'test-secret-key');
+
+      expect(restored.apiKey, 'test-secret-key');
     },
   );
 
   test('empty values remove credentials from the secure store', () async {
     final _MemoryCredentialStore store = _MemoryCredentialStore()
-      ..value = const PronunciationCredentials(
-        appId: '1250000000',
-        secretId: 'test-secret-id',
-        secretKey: 'test-secret-key',
-      );
+      ..value = const PronunciationCredentials(apiKey: 'test-secret-key');
     final ProviderContainer container = ProviderContainer(
       overrides: <Override>[
         pronunciationCredentialStoreProvider.overrideWithValue(store),
@@ -74,7 +65,7 @@ void main() {
     await container.read(pronunciationCredentialsProvider.future);
     await container
         .read(pronunciationCredentialsProvider.notifier)
-        .saveCredentials(appId: '', secretId: '', secretKey: '');
+        .saveCredentials(apiKey: '');
     expect(store.value.isComplete, isFalse);
   });
 
@@ -91,19 +82,14 @@ void main() {
       await container.read(pronunciationCredentialsProvider.future);
       await container
           .read(pronunciationCredentialsProvider.notifier)
-          .saveCredentials(
-            appId: ' 1250000000 ',
-            secretId: ' test-secret-id ',
-            secretKey: ' test-secret-key ',
-          );
+          .saveCredentials(apiKey: ' test-secret-key ');
 
       final PronunciationCredentials saved = container
           .read(pronunciationCredentialsProvider)
           .requireValue;
-      expect(saved.appId, '1250000000');
-      expect(saved.secretId, 'test-secret-id');
-      expect(saved.secretKey, 'test-secret-key');
-      expect(store.value.secretKey, saved.secretKey);
+
+      expect(saved.apiKey, 'test-secret-key');
+      expect(store.value.apiKey, saved.apiKey);
     },
   );
 }

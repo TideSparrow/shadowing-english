@@ -15,7 +15,8 @@ import 'ai_subtitle_management_screen.dart';
 import 'app_update_provider.dart';
 import 'settings_provider.dart';
 import 'widgets/pronunciation_settings_card.dart';
-import 'widgets/settings_group_card.dart';
+import 'widgets/settings_rows.dart';
+import 'widgets/settings_section_navigation.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -51,7 +52,7 @@ class SettingsScreen extends ConsumerWidget {
       }
     });
 
-    final Widget updateAction = _ActionRow(
+    final Widget updateAction = SettingsActionRow(
       title: updateState.isChecking
           ? '正在检查更新…'
           : updateState.downloadedPath != null
@@ -77,35 +78,36 @@ class SettingsScreen extends ConsumerWidget {
     return PadScaffold(
       currentDestination: AppNavDestination.settings,
       topBar: const PadTopBar(title: '英语学习休息室', subtitle: '设置'),
-      body: ListView(
-        padding: EdgeInsets.all(context.padPagePadding),
-        children: <Widget>[
-          Text(
-            '设置',
-            style: TextStyle(
-              fontSize: compact ? 30 : 34,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF191C1E),
+      body: SettingsSectionNavigation(
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              '设置',
+              style: TextStyle(
+                fontSize: compact ? 30 : 34,
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF191C1E),
+              ),
             ),
-          ),
-          SizedBox(height: compact ? 6 : 8),
-          Text(
-            '管理您的学习体验',
-            style: TextStyle(
-              fontSize: compact ? 14 : 15,
-              color: const Color(0xFF53625A),
+            SizedBox(height: compact ? 6 : 8),
+            Text(
+              '管理您的学习体验',
+              style: TextStyle(
+                fontSize: compact ? 14 : 15,
+                color: const Color(0xFF53625A),
+              ),
             ),
-          ),
-          SizedBox(height: context.padSectionGap),
-          if (updateState.update != null) ...<Widget>[
-            SettingsGroupCard(
+          ],
+        ),
+        sections: <SettingsSection>[
+          if (updateState.update != null)
+            SettingsSection.group(
               title: '应用更新',
               icon: Icons.system_update_rounded,
               children: <Widget>[updateAction],
             ),
-            SizedBox(height: context.padSectionGap),
-          ],
-          SettingsGroupCard(
+          SettingsSection.group(
             title: '播放',
             icon: Icons.play_circle_rounded,
             children: <Widget>[
@@ -163,7 +165,7 @@ class SettingsScreen extends ConsumerWidget {
                       .setFontSize(value);
                 },
               ),
-              _InputRow(
+              SettingsInputRow(
                 title: '字幕延迟 ms',
                 description: '字幕比视频快时填正数，例如 500；比视频慢时填负数。',
                 value: settings.subtitleDelayMs.toString(),
@@ -183,8 +185,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          SizedBox(height: compact ? 20 : 24),
-          SettingsGroupCard(
+          SettingsSection.group(
             title: '学习',
             icon: Icons.school_outlined,
             children: <Widget>[
@@ -264,12 +265,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          SizedBox(height: compact ? 20 : 24),
-          if (pronunciationScoringEnabled) ...<Widget>[
-            const PronunciationSettingsCard(),
-            SizedBox(height: compact ? 20 : 24),
-          ],
-          SettingsGroupCard(
+          SettingsSection.group(
             title: '翻译',
             icon: Icons.translate_rounded,
             children: <Widget>[
@@ -288,7 +284,7 @@ class SettingsScreen extends ConsumerWidget {
                 },
               ),
               if (isAiProvider) ...<Widget>[
-                _InputRow(
+                SettingsInputRow(
                   title: 'API Key',
                   description: '用于调用 AI 翻译接口。',
                   value: settings.translationApiKey,
@@ -310,7 +306,7 @@ class SettingsScreen extends ConsumerWidget {
                         .setUseCustomTranslationEndpoint(value: value);
                   },
                 ),
-                _InputRow(
+                SettingsInputRow(
                   title: 'Base URL',
                   description: '默认已内置，可按需覆盖。',
                   value: settings.translationBaseUrl,
@@ -371,7 +367,7 @@ class SettingsScreen extends ConsumerWidget {
                           .setTranslationModel(value);
                     },
                   ),
-                _InputRow(
+                SettingsInputRow(
                   title: 'Model',
                   description: '可手动输入模型名；已获取模型后也可以直接覆盖。',
                   value: settings.translationModel,
@@ -384,7 +380,7 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ],
               if (isGoogleTranslate)
-                _InputRow(
+                SettingsInputRow(
                   title: 'API Key',
                   description: 'Google Cloud Translation API Key。',
                   value: settings.translationApiKey,
@@ -397,7 +393,7 @@ class SettingsScreen extends ConsumerWidget {
                   },
                 ),
               if (isBaiduTranslate) ...<Widget>[
-                _InputRow(
+                SettingsInputRow(
                   title: 'App ID',
                   description: '百度翻译开放平台 App ID。',
                   value: settings.translationApiKey,
@@ -409,7 +405,7 @@ class SettingsScreen extends ConsumerWidget {
                         .setTranslationApiKey(value);
                   },
                 ),
-                _InputRow(
+                SettingsInputRow(
                   title: 'Secret',
                   description: '百度翻译开放平台密钥。',
                   value: settings.translationApiSecret,
@@ -423,7 +419,7 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ],
               if (isAliyunTranslate) ...<Widget>[
-                _InputRow(
+                SettingsInputRow(
                   title: 'AccessKey ID',
                   description: '阿里云 AccessKey ID。',
                   value: settings.translationApiKey,
@@ -435,7 +431,7 @@ class SettingsScreen extends ConsumerWidget {
                         .setTranslationApiKey(value);
                   },
                 ),
-                _InputRow(
+                SettingsInputRow(
                   title: 'AccessKey Secret',
                   description: '阿里云 AccessKey Secret。',
                   value: settings.translationApiSecret,
@@ -450,11 +446,14 @@ class SettingsScreen extends ConsumerWidget {
               ],
             ],
           ),
-          SizedBox(height: compact ? 20 : 24),
-          const LessonSettingsCard(),
-          SizedBox(height: compact ? 20 : 24),
-          SettingsGroupCard(
+          const SettingsSection(
+            label: '精讲',
+            icon: Icons.auto_stories_outlined,
+            content: LessonSettingsCard(),
+          ),
+          SettingsSection.group(
             title: 'AI生成可跟读的词级同步字幕',
+            label: 'AI 字幕',
             icon: Icons.auto_awesome_rounded,
             children: <Widget>[
               Builder(
@@ -492,7 +491,7 @@ class SettingsScreen extends ConsumerWidget {
                         },
                       ),
                       if (isTencentAsr) ...<Widget>[
-                        _InputRow(
+                        SettingsInputRow(
                           title: '腾讯云 SecretId',
                           description: '在腾讯云访问密钥页面创建。',
                           value: tencentCredential.secretId,
@@ -509,7 +508,7 @@ class SettingsScreen extends ConsumerWidget {
                                 );
                           },
                         ),
-                        _InputRow(
+                        SettingsInputRow(
                           title: '腾讯云 SecretKey',
                           description: '与 SecretId 配套的密钥。',
                           value: tencentCredential.secretKey,
@@ -527,7 +526,7 @@ class SettingsScreen extends ConsumerWidget {
                           },
                         ),
                       ] else
-                        _InputRow(
+                        SettingsInputRow(
                           title: '百炼 API Key',
                           description: '在阿里云百炼创建 API Key；音频仅临时上传用于转写。',
                           value: settings.asrApiKey,
@@ -540,7 +539,7 @@ class SettingsScreen extends ConsumerWidget {
                           },
                         ),
                       if (isAlibabaAsr)
-                        _ActionRow(
+                        SettingsActionRow(
                           title: '申请百炼 API Key',
                           description:
                               '1. 登录阿里云并开通百炼；2. 在 API Key 管理页创建；3. 复制到上方。',
@@ -563,7 +562,7 @@ class SettingsScreen extends ConsumerWidget {
                               .setUseCustomAsrEndpoint(value: value);
                         },
                       ),
-                      _InputRow(
+                      SettingsInputRow(
                         title: 'ASR Base URL',
                         description: '默认已内置，可按需覆盖。',
                         value: settings.asrBaseUrl,
@@ -575,7 +574,7 @@ class SettingsScreen extends ConsumerWidget {
                               .setAsrBaseUrl(value);
                         },
                       ),
-                      _InputRow(
+                      SettingsInputRow(
                         title: 'ASR Model',
                         description: isTencentAsr
                             ? '腾讯英文识别使用 16k_en。'
@@ -596,14 +595,19 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          SizedBox(height: compact ? 20 : 24),
-          SettingsGroupCard(
+          if (pronunciationCoachingEnabled)
+            const SettingsSection(
+              label: '跟读指导',
+              icon: Icons.record_voice_over_rounded,
+              content: PronunciationSettingsCard(),
+            ),
+          SettingsSection.group(
             title: '系统',
             icon: Icons.settings_system_daydream_rounded,
             children: <Widget>[
               if (supportsAppUpdates && updateState.update == null)
                 updateAction,
-              _ActionRow(
+              SettingsActionRow(
                 title: '管理 AI 字幕',
                 description: '查看、编辑、导出、重新生成或删除已生成的字幕。',
                 icon: Icons.subtitles_rounded,
@@ -613,12 +617,12 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              _ActionRow(
+              SettingsActionRow(
                 title: '备份同步云端数据',
                 description: '将您本地记录的 142 个词汇与学习周期备份，支持多设备同步。',
                 onTap: () => _showMessage(context, '精听学习进度和短语本备份同步成功！'),
               ),
-              _ActionRow(
+              SettingsActionRow(
                 title: '清除应用缓存与生词记录',
                 description: '清除所有收藏例句和缓存图片，重置应用到初始状态。',
                 danger: true,
@@ -626,12 +630,11 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          SizedBox(height: compact ? 20 : 24),
-          SettingsGroupCard(
+          SettingsSection.group(
             title: '支持项目',
             icon: Icons.coffee_rounded,
             children: <Widget>[
-              _ActionRow(
+              SettingsActionRow(
                 title: '请我喝杯咖啡',
                 description: '自愿赞助，支持开源维护与改进。将在浏览器打开 Buy Me a Coffee。',
                 icon: Icons.open_in_new_rounded,
@@ -639,18 +642,17 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          SizedBox(height: compact ? 20 : 24),
-          Center(
-            child: Text(
-              appVersion.when(
-                data: (String version) => '当前版本 v$version',
-                loading: () => '当前版本',
-                error: (_, _) => '当前版本未知',
-              ),
-              style: const TextStyle(fontSize: 12, color: Color(0xFF8C9890)),
-            ),
-          ),
         ],
+        footer: Center(
+          child: Text(
+            appVersion.when(
+              data: (String version) => '当前版本 v$version',
+              loading: () => '当前版本',
+              error: (_, _) => '当前版本未知',
+            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF8C9890)),
+          ),
+        ),
       ),
     );
   }
@@ -790,11 +792,11 @@ class _ModelFetchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SettingsRowFrame(
+    return SettingsRowFrame(
       child: Row(
         children: <Widget>[
           Expanded(
-            child: _TitleBlock(
+            child: SettingsTitleBlock(
               title: title,
               description: hasModels ? loadedDescription : emptyDescription,
             ),
@@ -832,11 +834,11 @@ class _TtsEngineRow extends StatelessWidget {
     );
     final String value = hasSelected ? selectedEngine : '';
 
-    return _SettingsRowFrame(
+    return SettingsRowFrame(
       child: Row(
         children: <Widget>[
           Expanded(
-            child: _TitleBlock(
+            child: SettingsTitleBlock(
               title: 'TTS 语音引擎',
               description: isLoading
                   ? '正在读取设备语音引擎。'
@@ -991,7 +993,7 @@ class _TtsVoiceRowState extends ConsumerState<_TtsVoiceRow> {
       (TtsVoiceOption voice) => voice.id == widget.selectedVoice,
     );
     final String value = hasSelected ? widget.selectedVoice : '';
-    final Widget title = _TitleBlock(
+    final Widget title = SettingsTitleBlock(
       title: '英语朗读音色',
       description: widget.isLoading ? '正在读取当前引擎的英语音色。' : '选择后可试听，使用下方设置的朗读速度。',
     );
@@ -1046,7 +1048,7 @@ class _TtsVoiceRowState extends ConsumerState<_TtsVoiceRow> {
       label: Text(_previewing ? '停止' : '试听'),
       style: OutlinedButton.styleFrom(minimumSize: const Size(88, 48)),
     );
-    return _SettingsRowFrame(
+    return SettingsRowFrame(
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           if (constraints.maxWidth < 720) {
@@ -1097,11 +1099,11 @@ class _SubtitleWordHighlightBorderWidthRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SettingsRowFrame(
+    return SettingsRowFrame(
       child: Row(
         children: <Widget>[
           const Expanded(
-            child: _TitleBlock(
+            child: SettingsTitleBlock(
               title: '单词高亮边框粗细',
               description: '调整播放中当前朗读单词的边框粗细。',
             ),
@@ -1155,11 +1157,11 @@ class _TtsRateRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SettingsRowFrame(
+    return SettingsRowFrame(
       child: Row(
         children: <Widget>[
           const Expanded(
-            child: _TitleBlock(
+            child: SettingsTitleBlock(
               title: '英语朗读速度',
               description: '只影响单词和句子朗读，不影响视频播放速度。',
             ),
@@ -1202,70 +1204,6 @@ class _TtsRateRow extends StatelessWidget {
   }
 }
 
-class _InputRow extends StatelessWidget {
-  const _InputRow({
-    required this.title,
-    required this.description,
-    required this.value,
-    required this.hintText,
-    required this.onChanged,
-    this.enabled = true,
-    this.obscureText = false,
-    this.keyboardType,
-  });
-
-  final String title;
-  final String description;
-  final String value;
-  final String hintText;
-  final ValueChanged<String> onChanged;
-  final bool enabled;
-  final bool obscureText;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SettingsRowFrame(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          _TitleBlock(title: title, description: description),
-          const SizedBox(height: 12),
-          TextFormField(
-            key: ValueKey<int>(Object.hash(title, enabled, value.hashCode)),
-            initialValue: value,
-            enabled: enabled,
-            obscureText: obscureText,
-            keyboardType: keyboardType,
-            onChanged: onChanged,
-            decoration: InputDecoration(
-              hintText: hintText,
-              filled: true,
-              fillColor: enabled ? Colors.white : const Color(0xFFF3F6F4),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFB9CDBE)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFB9CDBE)),
-              ),
-              disabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFD4DDD7)),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SelectRow extends StatelessWidget {
   const _SelectRow({
     required this.title,
@@ -1285,11 +1223,11 @@ class _SelectRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SettingsRowFrame(
+    return SettingsRowFrame(
       child: Row(
         children: <Widget>[
           Expanded(
-            child: _TitleBlock(title: title, description: description),
+            child: SettingsTitleBlock(title: title, description: description),
           ),
           const SizedBox(width: 16),
           DecoratedBox(
@@ -1342,11 +1280,11 @@ class _SwitchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SettingsRowFrame(
+    return SettingsRowFrame(
       child: Row(
         children: <Widget>[
           Expanded(
-            child: _TitleBlock(title: title, description: description),
+            child: SettingsTitleBlock(title: title, description: description),
           ),
           const SizedBox(width: 16),
           SwitchTheme(
@@ -1373,115 +1311,6 @@ class _SwitchRow extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _ActionRow extends StatelessWidget {
-  const _ActionRow({
-    required this.title,
-    required this.description,
-    required this.onTap,
-    this.danger = false,
-    this.icon,
-  });
-
-  final String title;
-  final String description;
-  final VoidCallback onTap;
-  final bool danger;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color titleColor = danger
-        ? const Color(0xFFC62828)
-        : const Color(0xFF191C1E);
-    final Color descColor = danger
-        ? const Color(0xFFD86A6A)
-        : const Color(0xFF53625A);
-    final Color iconColor = danger
-        ? const Color(0xFFC62828)
-        : const Color(0xFF8C9890);
-
-    return InkWell(
-      onTap: onTap,
-      child: _SettingsRowFrame(
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: titleColor,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    description,
-                    style: TextStyle(fontSize: 12, color: descColor),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              icon ??
-                  (danger
-                      ? Icons.restore_from_trash_rounded
-                      : Icons.chevron_right_rounded),
-              color: iconColor,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsRowFrame extends StatelessWidget {
-  const _SettingsRowFrame({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      child: child,
-    );
-  }
-}
-
-class _TitleBlock extends StatelessWidget {
-  const _TitleBlock({required this.title, required this.description});
-
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF191C1E),
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          description,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF53625A)),
-        ),
-      ],
     );
   }
 }

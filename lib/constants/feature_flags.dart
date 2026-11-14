@@ -1,2 +1,4 @@
-/// Local recording stays available; cloud pronunciation scoring stays hidden.
-const bool pronunciationScoringEnabled = false;
+import 'package:flutter/foundation.dart';
+
+/// Cloud coaching uses device-local credentials on native platforms.
+const bool pronunciationCoachingEnabled = !kIsWeb;

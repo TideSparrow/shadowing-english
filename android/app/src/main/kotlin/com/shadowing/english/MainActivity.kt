@@ -339,6 +339,7 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
                     engine = call.argument<String>("engine")?.trim().orEmpty(),
                     voice = call.argument<String>("voice")?.trim().orEmpty(),
                     rate = call.argument<Double>("rate")?.toFloat() ?: 0.75f,
+                    offlineOnly = call.argument<Boolean>("offlineOnly") ?: false,
                     result = result,
                 ),
             )
@@ -927,8 +928,16 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
         val request = pendingTtsRequests.removeFirst()
         val locale = Locale.forLanguageTag(request.language)
         // ponytail: Xiaomi TTS can report language unavailable but still speak with its default voice.
-        tts.setLanguage(locale)
-        selectVoice(tts, locale, request.voice)
+        if (request.offlineOnly) {
+            if (!selectVoice(tts, locale, request.voice, offlineOnly = true)) {
+                request.result.success(false)
+                drainNativeTtsRequests()
+                return
+            }
+        } else {
+            tts.setLanguage(locale)
+            selectVoice(tts, locale, request.voice)
+        }
 
         tts.setSpeechRate(request.rate)
         val utteranceId = UUID.randomUUID().toString()
@@ -943,20 +952,24 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
         }
     }
 
-    private fun selectVoice(tts: TextToSpeech, locale: Locale, selectedVoice: String) {
+    private fun selectVoice(
+        tts: TextToSpeech,
+        locale: Locale,
+        selectedVoice: String,
+        offlineOnly: Boolean = false,
+    ): Boolean {
         val voices = tts.voices
             .asSequence()
             .filter { it.locale.language == locale.language }
             .filter { !it.features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) }
+            .filter { !offlineOnly || !it.isNetworkConnectionRequired }
             .sortedWith(
                 compareByDescending<android.speech.tts.Voice> { it.quality }
                     .thenBy { it.latency },
             )
             .toList()
         val voice = voices.firstOrNull { it.name == selectedVoice } ?: voices.firstOrNull()
-        if (voice != null) {
-            tts.voice = voice
-        }
+        return voice != null && tts.setVoice(voice) == TextToSpeech.SUCCESS
     }
 
     private fun voiceQualityLabel(quality: Int): String = when {
@@ -1030,6 +1043,7 @@ class MainActivity : FlutterActivity(), MethodChannel.MethodCallHandler {
         val engine: String,
         val voice: String,
         val rate: Float,
+        val offlineOnly: Boolean,
         val result: MethodChannel.Result,
     )
 }

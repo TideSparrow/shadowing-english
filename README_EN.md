@@ -193,7 +193,11 @@ Visit [Releases](https://github.com/TideSparrow/shadowing-english/releases/lates
 
 Starting with v0.1.2, each release includes `SHA256SUMS.txt` to verify downloaded files.
 
-Local shadowing recording, playback, and original-audio waveform comparison do not require an assessment API key. Cloud scoring and its credential settings are currently hidden. The Linux desktop build requires `libsecret-1-0`; source builds also require `libsecret-1-dev`. Microphone recording requires `pulseaudio-utils` (for `parecord` and `pactl`) and a running PulseAudio service; PipeWire setups need PulseAudio compatibility enabled.
+Local shadowing recording, playback, and waveform comparison do not require an assessment API key. The Linux desktop build requires `libsecret-1-0`; source builds also require `libsecret-1-dev`. Microphone recording requires `pulseaudio-utils` (for `parecord` and `pactl`) and a running PulseAudio service; PipeWire setups need PulseAudio compatibility enabled.
+
+### Shadowing coaching
+
+Enable [Doubao Seed 2.1 Lite](https://ark.volcengine.com/region:cn-beijing/openManagement) on Volcengine Ark, then enter your [API key](https://ark.volcengine.com/region:cn-beijing/apiKey) in the shadowing coaching settings. After recording, request guidance to send the English subtitle, video excerpt, and your recording to Ark. The device reads the returned advice in Chinese. Recordings and guidance can be revisited in local practice history. The recording screen estimates the pay-as-you-go cost before submission. [Setup guide](README.md#跟读指导) · [Ark model pricing](https://docs.volcengine.com/docs/ark/model-pricing?lang=zh)
 
 ### Run from source
 
