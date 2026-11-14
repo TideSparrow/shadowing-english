@@ -223,6 +223,10 @@ AI 识别仍可能受到背景音乐、多人重叠说话、口音和录音质�
 
 每次提交按音频和文字用量后付费。界面会按本次音频长度和一段简短回复估算费用，实际扣费以方舟账单为准。[方舟模型计费](https://docs.volcengine.com/docs/ark/model-pricing?lang=zh)
 
+| 发音指导 | 同句练习记录 |
+| :---: | :---: |
+| <img src="assets/showcase/pronunciation-guidance.jpg" alt="发音指导弹窗，支持回听视频原声、自己的录音和中文指导" width="100%" /> | <img src="assets/showcase/pronunciation-practice-history.jpg" alt="同一句的多次跟读练习记录" width="100%" /> |
+
 ### 从源码运行
 
 需要 Flutter 3.44.4；FVM 和 VS Code 都是可选工具。推荐通过 FVM 固定版本，使用前先安装 [FVM](https://fvm.app/documentation/getting-started/installation)。

@@ -199,6 +199,10 @@ Local shadowing recording, playback, and waveform comparison do not require an a
 
 Enable [Doubao Seed 2.1 Lite](https://ark.volcengine.com/region:cn-beijing/openManagement) on Volcengine Ark, then enter your [API key](https://ark.volcengine.com/region:cn-beijing/apiKey) in the shadowing coaching settings. After recording, request guidance to send the English subtitle, video excerpt, and your recording to Ark. The device reads the returned advice in Chinese. Recordings and guidance can be revisited in local practice history. The recording screen estimates the pay-as-you-go cost before submission. [Setup guide](README.md#跟读指导) · [Ark model pricing](https://docs.volcengine.com/docs/ark/model-pricing?lang=zh)
 
+| Pronunciation feedback | Practice history for one sentence |
+| :---: | :---: |
+| <img src="assets/showcase/pronunciation-guidance.jpg" alt="Pronunciation feedback dialog with playback for the original audio, your recording, and spoken feedback in Chinese" width="100%" /> | <img src="assets/showcase/pronunciation-practice-history.jpg" alt="Practice history showing multiple recordings for the same sentence" width="100%" /> |
+
 ### Run from source
 
 Flutter 3.44.4 is required. FVM and VS Code are optional; FVM is recommended for pinning the SDK version. To use FVM, [install it](https://fvm.app/documentation/getting-started/installation) first.
