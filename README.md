@@ -288,4 +288,4 @@ Shadowing English 使用 [MIT License](LICENSE) 开源。
 
 ## ⭐ TideSparrow 的其他项目
 
-- [Browser Game Hub](https://browsergamehub.net/) — 免费浏览器游戏合集，打开网页就能玩。
+- [Browser Game Hub](https://browsergamehub.net/?utm_source=shadowing_english&utm_medium=referral&utm_campaign=github_readme&utm_content=zh) — 免费浏览器游戏合集，打开网页就能玩。
