@@ -285,3 +285,7 @@ Friends-S01E01.zh.srt
 Shadowing English 使用 [MIT License](LICENSE) 开源。
 
 如果你正在寻找一个用本地视频练习英语听力、英语跟读和英语口语表达的工具，欢迎试试 Shadowing English。
+
+## ⭐ TideSparrow 的其他项目
+
+- [Browser Game Hub](https://browsergamehub.net/) — 免费浏览器游戏合集，打开网页就能玩。

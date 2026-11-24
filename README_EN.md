@@ -261,3 +261,7 @@ Support is entirely optional and does not affect access to the app or its MIT li
 Shadowing English is available under the [MIT License](LICENSE).
 
 For English listening practice, English speaking practice, and English shadowing with local videos, Shadowing English is ready for your own learning library.
+
+## ⭐ More from TideSparrow
+
+- [Browser Game Hub](https://browsergamehub.net/) — A collection of free games you can play directly in your browser.
